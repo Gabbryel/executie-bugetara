@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ro" data-theme="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Execuție bugetară — machetă CAS</title>
+<link rel="stylesheet" href="assets/styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>📊</text></svg>">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top noprint">
+    <div class="title">
+      <h1>Execuție bugetară — machetă CAS</h1>
+      <small>Plăți din FNUASS pe unități sanitare cu paturi · valori în mii lei, 3 zecimale</small>
+    </div>
+    <div class="bar">
+      <button class="btn" id="btnNew">Formular nou</button>
+      <button class="btn" id="btnGh">Bază de date (GitHub)</button>
+      <button class="btn" id="btnJson">Export JSON</button>
+      <button class="btn" id="btnPdf">Tipărire / PDF</button>
+      <button class="btn pri" id="btnXlsx">Export machetă .xlsx</button>
+      <button class="btn" id="btnTheme" title="Comută tema">◐</button>
+    </div>
+  </header>
+
+  <section class="card noprint">
+    <div class="grid">
+      <div><label class="f" for="unitate">Unitatea</label><input type="text" id="unitate"></div>
+      <div><label class="f" for="an">An</label><input type="number" id="an" min="2020" max="2100"></div>
+      <div><label class="f" for="luna">Luna (cumulat până la)</label><select id="luna"></select></div>
+      <div>
+        <label class="f">Mod de completare</label>
+        <div class="row-inline" style="padding-top:4px">
+          <label><input type="radio" name="mode" id="modeCumulat" checked> cumulat</label>
+          <label><input type="radio" name="mode" id="modeDelta" disabled> delta</label>
+        </div>
+      </div>
+      <div>
+        <label class="f">Opțiuni</label>
+        <div class="row-inline" style="padding-top:4px">
+          <label title="col.3 = col.5 = col.6"><input type="checkbox" id="linkEG" checked> leagă col. 3 și 5 de col. 6</label>
+          <label title="Ascunde rândurile fără valori"><input type="checkbox" id="hideZero"> ascunde zerourile</label>
+        </div>
+      </div>
+      <div><label class="f" for="filtru">Caută rând</label><input type="text" id="filtru" placeholder="ex. medicamente, chirii, 52"></div>
+    </div>
+
+    <div class="row-inline" style="margin-top:12px">
+      <label class="btn">Importă lună precedentă<input type="file" id="fPrev" accept=".xlsx,.json" hidden></label>
+      <label class="btn">Importă machetă (lună curentă)<input type="file" id="fCur" accept=".xlsx,.json" hidden></label>
+      <label class="btn">Importă fișa BC39<input type="file" id="fBc" accept=".xlsx" hidden></label>
+      <span class="muted" id="prevInfo">Nicio lună precedentă încărcată</span>
+    </div>
+    <p class="hintbox">Modul <b>delta</b> se activează după ce încarci luna precedentă: completezi doar plățile lunii (col. 7) și delta cheltuielilor efective, iar cumulatele se calculează singure.</p>
+  </section>
+
+  <section class="card noprint">
+    <div class="row-inline" style="justify-content:space-between">
+      <div class="row-inline">
+        <span class="chip">Total plăți cumulate <b id="t8h">0,000</b></span>
+        <span class="chip">Luna curentă <b id="t8i">0,000</b></span>
+        <span class="chip">BC39 Bugetar <b id="bcBug">0</b> lei</span>
+        <span class="chip">BC39 Angajament <b id="bcAng">0</b> lei</span>
+        <span class="muted" id="bcRef"></span>
+        <span class="muted" style="display:none" id="t8e"></span><span class="muted" style="display:none" id="t8f"></span>
+      </div>
+      <b id="chkBadge" style="font-size:12px"></b>
+    </div>
+    <div class="checks" id="checks" style="margin-top:10px"></div>
+  </section>
+
+  <div class="printhead">
+    <div class="u" id="phUnit"></div><div class="a">ANEXA</div>
+    <h2>Plățile efectuate din FONDUL NAȚIONAL UNIC DE ASIGURĂRI SOCIALE DE SĂNĂTATE PE UNITĂȚILE SANITARE CU PATURI</h2>
+    <div class="mu" id="phTitle"></div><div class="um">mii lei</div>
+  </div>
+
+  <div class="tablewrap"><table id="tbl"></table></div>
+
+  <div class="signrow">
+    <div>Răspundem de corectitudinea datelor raportate<br><br>Manager, ................................</div>
+    <div style="text-align:right">Director financiar-contabil,<br><br>................................</div>
+  </div>
+
+  <p class="status noprint" id="status" style="margin-top:8px"></p>
+</div>
+
+<dialog id="ghDlg">
+  <div class="dlg-h"><h3>Bază de date în GitHub</h3><button class="btn" id="ghClose">Închide</button></div>
+  <div class="dlg-b">
+    <p class="muted" style="margin-top:0">Fiecare lună se salvează ca <code>data/AAAA-LL.json</code> într-un depozit GitHub. Depozitul este baza de date; istoricul commit-urilor este jurnalul de modificări.</p>
+    <div class="cols2">
+      <div><label class="f" for="ghOwner">Owner (user / org)</label><input type="text" id="ghOwner" placeholder="ex. gabriel"></div>
+      <div><label class="f" for="ghRepo">Depozit</label><input type="text" id="ghRepo" placeholder="ex. executie-bugetara-date"></div>
+      <div><label class="f" for="ghBranch">Branch</label><input type="text" id="ghBranch" value="main"></div>
+      <div><label class="f" for="ghDir">Director</label><input type="text" id="ghDir" value="data"></div>
+    </div>
+    <div style="margin-top:10px"><label class="f" for="ghTok">Token (fine-grained PAT, Contents: read and write)</label><input type="password" id="ghTok" placeholder="github_pat_…"></div>
+    <div class="warnbox">Tokenul se păstrează doar în <b>localStorage</b>, în acest browser. Oricine folosește acest profil de browser îl poate extrage. Emite un token <i>fine-grained</i> limitat la un singur depozit privat, cu expirare scurtă, și șterge-l când nu îl mai folosești. Fără token se poate doar citi, și numai dintr-un depozit public.</div>
+    <div class="row-inline" style="margin-top:12px">
+      <button class="btn pri" id="ghSaveCfg">Salvează setările și testează</button>
+      <button class="btn" id="ghPush">Salvează luna curentă în GitHub</button>
+    </div>
+    <p class="status" id="ghStatus" style="margin-top:10px"></p>
+    <div id="ghList" style="margin-top:6px;max-height:220px;overflow:auto"></div>
+  </div>
+</dialog>
+
+<script src="assets/jszip.min.js"></script>
+<script type="module" src="assets/app.js"></script>
+</body>
+</html>
