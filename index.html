@@ -11,48 +11,44 @@
 <div class="app">
 
   <header class="top noprint">
-    <div class="title">
-      <h1>Execuție bugetară</h1>
-      <small>machetă CAS · mii lei, 3 zecimale</small>
-    </div>
-    <div class="bar">
-      <details class="menu" id="impMenu">
-        <summary class="btn">Importă ▾</summary>
-        <div class="menu-list">
-          <label>Lună precedentă (.xlsx / .json)<input type="file" id="fPrev" accept=".xlsx,.json" hidden></label>
-          <label>Machetă lună curentă (.xlsx / .json)<input type="file" id="fCur" accept=".xlsx,.json" hidden></label>
-          <label>Fișa BC39 (.xlsx)<input type="file" id="fBc" accept=".xlsx" hidden></label>
-        </div>
-      </details>
-      <button class="btn" id="btnNew">Formular nou</button>
-      <button class="btn" id="btnGh">GitHub</button>
-      <button class="btn" id="btnJson">Export JSON</button>
-      <button class="btn" id="btnPdf">PDF</button>
-      <button class="btn pri" id="btnXlsx">Export .xlsx</button>
-      <button class="btn" id="btnSide" title="Arată / ascunde verificările">Verificări <b id="chkBadge"></b></button>
-      <button class="btn icon" id="btnTheme" title="Comută tema">◐</button>
-    </div>
-  </header>
-
-  <div class="tools noprint">
-    <label class="fld grow"><span>Unitatea</span><input type="text" id="unitate"></label>
-    <label class="fld w-an"><span>An</span><input type="number" id="an" min="2020" max="2100"></label>
-    <label class="fld w-luna"><span>Luna (cumulat până la)</span><select id="luna"></select></label>
-    <div class="fld"><span>Mod</span>
-      <div class="seg">
+    <div class="meta">
+      <input type="text" id="unitate" class="plain unit" title="Unitatea" spellcheck="false">
+      <span class="sep">·</span>
+      <select id="luna" class="plain" title="Luna (cumulat până la)"></select>
+      <input type="number" id="an" class="plain an" min="2020" max="2100" title="An">
+      <div class="seg" id="modeSeg" hidden title="Mod de completare">
         <label><input type="radio" name="mode" id="modeCumulat" checked><span>cumulat</span></label>
         <label><input type="radio" name="mode" id="modeDelta" disabled><span>delta</span></label>
       </div>
     </div>
-    <div class="fld"><span>Opțiuni</span>
-      <div class="opts">
-        <label title="col.3 = col.5 = col.6"><input type="checkbox" id="linkEG" checked> leagă col. 3 și 5 de col. 6</label>
-        <label title="Ascunde rândurile fără valori"><input type="checkbox" id="hideZero"> ascunde zerourile</label>
-      </div>
+    <div class="bar">
+      <input type="search" id="filtru" class="search" placeholder="Caută rând…" title="Caută după denumire sau numărul rândului">
+      <button class="btn quiet" id="btnSide" title="Lista de control">Verificări <b id="chkBadge"></b></button>
+      <button class="btn pri" id="btnXlsx">Export .xlsx</button>
+      <details class="menu" id="mainMenu">
+        <summary class="btn quiet icon" title="Meniu">⋯</summary>
+        <div class="menu-list">
+          <div class="menu-t">Importă</div>
+          <label>Lună precedentă (.xlsx / .json)<input type="file" id="fPrev" accept=".xlsx,.json" hidden></label>
+          <label>Machetă lună curentă (.xlsx / .json)<input type="file" id="fCur" accept=".xlsx,.json" hidden></label>
+          <label>Fișa BC39 (.xlsx)<input type="file" id="fBc" accept=".xlsx" hidden></label>
+          <div class="menu-i muted" id="prevInfo">Nicio lună precedentă încărcată</div>
+          <div class="menu-t">Exportă</div>
+          <button id="btnJson">Export JSON</button>
+          <button id="btnPdf">Tipărire / PDF</button>
+          <button id="btnGh">Bază de date (GitHub)…</button>
+          <div class="menu-t">Opțiuni</div>
+          <label class="chk-i" title="col.3 = col.5 = col.6"><input type="checkbox" id="linkEG" checked> leagă col. 3 și 5 de col. 6</label>
+          <label class="chk-i" title="Ascunde rândurile fără valori"><input type="checkbox" id="hideZero"> ascunde rândurile cu zero</label>
+          <button id="btnTheme">Comută tema</button>
+          <div class="menu-t"></div>
+          <button id="btnNew" class="danger">Formular nou (golește tot)</button>
+        </div>
+      </details>
     </div>
-    <label class="fld w-cauta"><span>Caută rând</span><input type="search" id="filtru" placeholder="medicamente, chirii, 52…"></label>
-    <span class="muted prev" id="prevInfo">Nicio lună precedentă încărcată</span>
-  </div>
+  </header>
+
+  <div class="guide noprint" id="guide"></div>
 
   <div class="main">
     <div class="printhead">
@@ -67,22 +63,22 @@
       <div>Răspundem de corectitudinea datelor raportate<br><br>Manager, ................................</div>
       <div style="text-align:right">Director financiar-contabil,<br><br>................................</div>
     </div>
-
-    <aside class="side noprint">
-      <div class="side-h"><h3>Sinteză</h3><button class="btn icon" id="btnSideClose" title="Închide">×</button></div>
-      <dl class="totals">
-        <dt>Total plăți cumulate</dt><dd><b id="t8h">0,000</b></dd>
-        <dt>Luna curentă</dt><dd><b id="t8i">0,000</b></dd>
-        <dt>BC39 Bugetar</dt><dd><b id="bcBug">0</b> lei</dd>
-        <dt>BC39 Angajament</dt><dd><b id="bcAng">0</b> lei</dd>
-      </dl>
-      <p class="muted small" id="bcRef"></p>
-      <span hidden id="t8e"></span><span hidden id="t8f"></span>
-      <div class="side-h"><h3>Lista de control</h3></div>
-      <div class="checks" id="checks"></div>
-      <p class="hintbox">Modul <b>delta</b> se activează după ce încarci luna precedentă: completezi doar plățile lunii (col. 7) și delta cheltuielilor efective, iar cumulatele se calculează singure.</p>
-    </aside>
   </div>
+
+  <aside class="side noprint">
+    <div class="side-h"><h3>Sinteză</h3><button class="btn quiet icon" id="btnSideClose" title="Închide">×</button></div>
+    <dl class="totals">
+      <dt>Total plăți cumulate</dt><dd><b id="t8h">0,000</b></dd>
+      <dt>Luna curentă</dt><dd><b id="t8i">0,000</b></dd>
+      <dt>BC39 Bugetar</dt><dd><b id="bcBug">0</b> lei</dd>
+      <dt>BC39 Angajament</dt><dd><b id="bcAng">0</b> lei</dd>
+    </dl>
+    <p class="muted small" id="bcRef"></p>
+    <span hidden id="t8e"></span><span hidden id="t8f"></span>
+    <div class="side-h"><h3>Lista de control</h3></div>
+    <div class="checks" id="checks"></div>
+    <p class="hintbox">Modul <b>delta</b> se activează după ce încarci luna precedentă: completezi doar plățile lunii (col. 7) și delta cheltuielilor efective, iar cumulatele se calculează singure.</p>
+  </aside>
 
   <p class="status noprint" id="status"></p>
 </div>

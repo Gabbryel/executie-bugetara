@@ -40,6 +40,8 @@ function recompute(){
       L.f = r3(d.f);
       if(state.linkEG){ L.e = L.h; L.g = L.h; }
     });
+  } else if(state.linkEG){
+    LEAVES.forEach(r=>{ const L = state.leaves[r]; L.e = L.h; L.g = L.h; });
   }
   return aggregate(state.leaves);
 }
@@ -76,7 +78,7 @@ function buildTable(){
     const pad = 4 + row.lvl*11;
     const cells = KEYS.map((k,idx)=>{
       if(isSum) return `<td class="num calc" data-calc="${row.r}.${k}">0,000</td>`;
-      const locked = state.linkEG && state.mode==='delta' && (k==='e'||k==='g');
+      const locked = state.linkEG && (k==='e'||k==='g');
       const derived = state.mode==='delta' && (k==='h'||k==='j');
       if(locked||derived) return `<td class="num calc" data-calc="${row.r}.${k}">0,000</td>`;
       const src = (state.mode==='delta' && k==='f') ? 'din.f' : (state.mode==='delta' && k==='i') ? 'din.i' : 'leaf.'+k;
@@ -169,11 +171,19 @@ function runChecks(vals){
   if(bc39ref && (bc39ref.bugetar!=null || bc39ref.angajament!=null)){
     const db = bc39ref.bugetar!=null ? Math.round(t.e*1000)-Math.round(bc39ref.bugetar) : 0;
     const da = bc39ref.angajament!=null ? Math.round(t.f*1000)-Math.round(bc39ref.angajament) : 0;
+    const tinta = (col, cur, ref, d) => ref==null ? '' :
+      `${col} este ${fmt(cur)}, trebuie ${fmt(ref/1000)} (${fmtLei(ref)} lei)` + (d===0 ? ' ✓' : d<0 ? ` — lipsesc ${fmt(-d/1000)}` : ` — în plus ${fmt(d/1000)}`);
     out.push(chk(db===0&&da===0,
       'Corelația cu fișa BC39',
       db===0&&da===0 ? `Bugetar ${fmtLei(t.e*1000)} lei și Angajament ${fmtLei(t.f*1000)} lei coincid cu BC39 (${bc39ref.sursa}).`
-        : `Diferență față de BC39: Bugetar ${db>0?'+':''}${fmtLei(db)} lei, Angajament ${da>0?'+':''}${fmtLei(da)} lei.`));
+        : `Rândul 8: ${[tinta('col.3',t.e,bc39ref.bugetar,db), tinta('col.4',t.f,bc39ref.angajament,da)].filter(Boolean).join(' · ')}.`));
+    $('#tbl').querySelectorAll('tr[data-row="8"] td[data-calc]').forEach(td=>{
+      const k = td.dataset.calc.split('.')[1];
+      const d = k==='e' ? db : k==='f' ? da : null;
+      td.classList.toggle('bad', d!==null && d!==0); td.classList.toggle('good', d===0);
+    });
   } else {
+    $('#tbl').querySelectorAll('tr[data-row="8"] td.bad,tr[data-row="8"] td.good').forEach(td=>td.classList.remove('bad','good'));
     out.push(chk(null,'Corelația cu fișa BC39',
       `De verificat manual: Bugetar = ${fmtLei(t.e*1000)} lei, Angajament = ${fmtLei(t.f*1000)} lei. Importă fișa BC39 pentru verificare automată.`));
   }
@@ -221,17 +231,38 @@ function runChecks(vals){
     bc39ref ? `Coloane de valori detectate: ${bc39ref.coloane.join(' · ')}. Numărul lor diferă de la o lună la alta; raportarea se face la același rând 8.`
             : 'Numărul coloanelor de valori din BC39 variază între luni (ex. „Spital" vs „Total" + „Spital (inclusiv PNS)"). Verifică antetul la fiecare depunere.'));
 
-  $('#checks').innerHTML = out.join('');
-  const errs = out.filter(h=>h.includes('chk err')).length;
+  $('#checks').innerHTML = out.map(chkHtml).join('');
+  const errs = out.filter(c=>c.cls==='err').length;
+  const g = guidance(vals, out);
+  const gd = $('#guide');
+  gd.className = 'guide '+g.cls;
+  gd.innerHTML = `<span class="ic"></span><span class="tx">${g.text}</span>` + (g.more ? `<button class="lnk" id="guideMore">Toate verificările</button>` : '');
   const badge = $('#chkBadge');
   badge.textContent = errs ? String(errs) : '✓';
   badge.className = errs ? 'err' : 'ok';
+  $('#btnSide').classList.toggle('has-err', errs>0);
   badge.title = errs ? errs + (errs===1?' problemă':' probleme') : 'Fără erori';
 }
 function chk(ok, title, det, warnIfFail){
   const cls = ok===null ? 'warn' : ok ? 'ok' : (warnIfFail?'warn':'err');
   const ic  = ok===null ? '?' : ok ? '✓' : '!';
-  return `<div class="chk ${cls}"><span class="ic">${ic}</span><span><b>${title}</b><span class="det">${det}</span></span></div>`;
+  return { cls, ic, title, det };
+}
+const chkHtml = c => `<div class="chk ${c.cls}"><span class="ic">${c.ic}</span><span><b>${c.title}</b><span class="det">${c.det}</span></span></div>`;
+
+/* ---------- ghidare: o singura linie care spune ce urmeaza ---------- */
+function guidance(vals, checks){
+  const t = vals[8];
+  const gol = KEYS.every(k=>Math.abs(t[k])<1e-9);
+  if(TPL && !TPL.check.ok) return { cls:'err', text:'Șablonul este defect: '+TPL.check.reason+'. Exportul ar produce o machetă greșită.' };
+  if(gol && !prev && !bc39ref) return { cls:'info', text:'Începe prin a importa luna precedentă sau macheta lunii curente din meniul ⋯, apoi fișa BC39 pentru verificare. Sau completează direct rândurile.' };
+  const err = checks.find(c=>c.cls==='err');
+  if(err) return { cls:'err', text:err.title+': '+err.det, more:true };
+  if(prev && state.mode==='cumulat' && gol) return { cls:'info', text:'Luna precedentă ('+prev.label+') e încărcată. Treci pe modul „delta" și completează doar plățile lunii (col. 7) și cheltuielile efective.' };
+  if(!bc39ref) return { cls:'info', text:`Rândul 8: Bugetar ${fmtLei(t.e*1000)} lei, Angajament ${fmtLei(t.f*1000)} lei. Importă fișa BC39 din meniul ⋯ ca să verific corelația automat.` };
+  const warn = checks.find(c=>c.cls==='warn' && c.ic==='!');
+  if(warn) return { cls:'warn', text:warn.title+': '+warn.det, more:true };
+  return { cls:'ok', text:'Se corelează cu BC39 ('+bc39ref.sursa+') și toate verificările trec. Poți exporta macheta .xlsx.' };
 }
 
 /* ---------- serializare ---------- */
@@ -267,7 +298,7 @@ function setPrev(leaves, label){
   prev = { leaves:L, label, totals: aggregate(L)[8] };
   state.prevLabel = label;
   $('#prevInfo').textContent = 'Lună precedentă: ' + label;
-  $('#modeDelta').disabled = false;
+  $('#modeDelta').disabled = false; $('#modeSeg').hidden = false;
   if($('#tbl').rows.length) render();
 }
 
@@ -293,7 +324,7 @@ function download(blob, name){
 async function onFile(input, target){
   const f = input.files[0]; if(!f) return;
   input.value='';
-  $('#impMenu').removeAttribute('open');
+  $('#mainMenu').removeAttribute('open');
   try{
     if(f.name.toLowerCase().endsWith('.json')){
       const data = JSON.parse(await f.text());
@@ -317,6 +348,9 @@ async function onFile(input, target){
     if(target==='prev'){ setPrev(m.values, eticheta); toast('Lună precedentă încărcată: '+eticheta); }
     else {
       LEAVES.forEach(r=>{ if(m.values[r]) Object.assign(state.leaves[r], m.values[r]); });
+      if(LEAVES.some(r=>{ const v=state.leaves[r]; return Math.abs(v.e-v.h)>0.0005 || Math.abs(v.g-v.h)>0.0005; })){
+        state.linkEG = false; toast('Macheta are col. 3 sau 5 diferite de col. 6 pe unele rânduri — am dezlegat coloanele.');
+      }
       if(lm) state.meta.luna = lm; if(la) state.meta.an = la;
       state.mode='cumulat'; syncMetaInputs(); buildTable(); render();
       toast('Machetă încărcată ca lună curentă'+(lm?' ('+eticheta+')':'')+'.');
@@ -364,10 +398,7 @@ async function ghSave(){
 let saveTimer;
 function scheduleSave(){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>store.draft.save(snapshot(true)), 600); }
 function toast(msg, bad){ const s=$('#status'); s.textContent=msg; s.classList.toggle('bad', !!bad); clearTimeout(toast._t); toast._t=setTimeout(()=>{s.textContent='';},6000); }
-function setSide(open){
-  document.body.classList.toggle('side', open);
-  try{ localStorage.setItem('execbug.side', open?'1':'0'); }catch{}
-}
+function setSide(open){ document.body.classList.toggle('side-open', open); }
 function syncMetaInputs(){
   $('#an').value = state.meta.an; $('#luna').value = state.meta.luna; $('#unitate').value = state.meta.unitate;
   $('#modeCumulat').checked = state.mode==='cumulat'; $('#modeDelta').checked = state.mode==='delta';
@@ -406,9 +437,12 @@ function wire(){
     store.cfg.setToken($('#ghTok').value.trim()); ghRefresh(); });
   $('#ghPush').addEventListener('click', ghSave);
   $('#ghClose').addEventListener('click', ()=>$('#ghDlg').close());
-  $('#btnSide').addEventListener('click', ()=>setSide(!document.body.classList.contains('side')));
+  $('#btnSide').addEventListener('click', ()=>setSide(!document.body.classList.contains('side-open')));
+  $('#guide').addEventListener('click', e=>{ if(e.target.id==='guideMore') setSide(true); });
   $('#btnSideClose').addEventListener('click', ()=>setSide(false));
-  document.addEventListener('click', e=>{ const m=$('#impMenu'); if(m.open && !m.contains(e.target)) m.removeAttribute('open'); });
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape' && document.body.classList.contains('side-open')) setSide(false); });
+  document.addEventListener('click', e=>{ if(document.body.classList.contains('side-open') && !e.target.closest('.side') && !e.target.closest('#btnSide') && e.target.id!=='guideMore') setSide(false); });
+  document.addEventListener('click', e=>{ const m=$('#mainMenu'); if(!m.open) return; if(!m.contains(e.target) || e.target.closest('.menu-list button')) m.removeAttribute('open'); });
   $('#btnTheme').addEventListener('click', ()=>{
     const cur = document.documentElement.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light');
     const nxt = cur==='dark' ? 'light' : 'dark';
@@ -419,9 +453,6 @@ function wire(){
 
 async function init(){
   try{ const t=localStorage.getItem('execbug.theme'); if(t) document.documentElement.setAttribute('data-theme',t); }catch{}
-  let side = matchMedia('(min-width:1100px)').matches;
-  try{ const v=localStorage.getItem('execbug.side'); if(v!==null) side = v==='1'; }catch{}
-  document.body.classList.toggle('side', side);
   wire(); syncMetaInputs(); buildTable();
   const d = store.draft.load();
   if(d){ try{ restore(d); toast('Ciornă restaurată din acest browser.'); }catch{} }

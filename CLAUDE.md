@@ -90,12 +90,24 @@ verificările trec. Pentru validarea exportului față de original, recalculeaz�
 
 Când adaugi o verificare: `chk(ok, titlu, detaliu, warnIfFail)`; `ok === null` = informativ.
 
-## Layout
+## Layout și ghidare
 
-Aplicație pe tot ecranul, fără derulare a paginii pe desktop: antet + bară de unelte (`auto`), apoi
-`.main` = tabelul (singura zonă care derulează, cu antetul și rândul 8 lipicioase) + panoul lateral
-`.side` (sinteză + lista de control, comutat din butonul „Verificări", stare în `localStorage`). Sub 1100px
-panoul devine sertar suprapus; sub 760px pagina derulează normal. Printarea ascunde tot în afara tabelului.
+Principiu: **la vedere stau doar tabelul și exportul**; restul e ascuns până e nevoie.
+
+- Antet pe o linie: unitatea, luna și anul ca text editabil (`.plain`), căutare, butonul „Verificări" cu
+  numărul de probleme, „Export .xlsx" și meniul `⋯` (importuri, export JSON/PDF, GitHub, opțiuni, temă,
+  formular nou). Comutatorul cumulat/delta apare doar după încărcarea lunii precedente.
+- **Linia de ghidare** (`#guide`, calculată de `guidance()` la fiecare randare) spune mereu ce urmează:
+  de unde începi, ce țintă are rândul 8 față de BC39 și cât lipsește, prima verificare picată, sau că
+  totul se corelează și poți exporta. Este singurul loc unde utilizatorul primește feedback fără să
+  deschidă ceva; orice verificare nouă trebuie să aibă un `det` formulat ca acțiune, nu ca stare.
+- Lista completă de control și sinteza stau în panoul `.side`, sertar suprapus din dreapta, închis implicit
+  (butonul „Verificări" sau linkul din ghidare). Escape / clic în afară îl închide.
+- Tabelul e singura zonă care derulează; antetul și rândul 8 sunt lipicioase. Celulele col. 3/4 ale
+  rândului 8 se colorează roșu/verde față de BC39.
+- Opțiunea „leagă col. 3 și 5 de col. 6" se aplică în ambele moduri; la importul unei machete în care
+  col. 3/5 diferă de col. 6 pe rânduri, se dezleagă automat ca să nu suprascrie valorile.
+- Sub 760px pagina derulează normal. Printarea ascunde tot în afara tabelului.
 
 Rândurile cu text lung în coloanele de cod (ex. r.110, unde macheta ține denumirea în coloana „Alin.")
 se afișează cu textul mutat în coloana de denumire — `buildTable` face asta, `rows.js` rămâne neatins.
