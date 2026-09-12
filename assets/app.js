@@ -60,16 +60,16 @@ export function aggregate(leaves){
 
 /* ---------- tabel ---------- */
 function buildTable(){
+  const H = (t,n,cls='') => `<th class="num ${cls}">${t}<small>${n}</small></th>`;
   const head = `<thead>
     <tr>
-      <th class="code" rowspan="2">Sub&shy;cap.</th><th class="code" rowspan="2">Titlu art.</th><th class="code" rowspan="2">Alin.</th>
-      <th class="lbl" rowspan="2">Denumirea indicatorilor</th>
-      <th class="num">Credite bugetare aprobate</th><th class="num">Credite de angajament</th>
-      <th class="num">Credite bugetare trimestriale cumulate</th><th class="num">Plăți nete de casă cumulat</th>
-      <th class="num">Luna curentă</th><th class="num">Cheltuieli efective</th>
-      <th class="num dcol">Δ efective luna</th>
+      <th class="code">Sub&shy;cap.</th><th class="code">Titlu art.</th><th class="code">Alin.</th>
+      <th class="lbl">Denumirea indicatorilor</th>
+      ${H('Credite bugetare aprobate',3)}${H('Credite de angajament',4)}
+      ${H('Credite trimestriale cumulate',5)}${H('Plăți nete de casă cumulat',6)}
+      ${H('Luna curentă',7)}${H('Cheltuieli efective',8)}
+      ${H('Δ efective luna','Δ','dcol')}
     </tr>
-    <tr>${[3,4,5,6,7,8].map(n=>`<th class="num muted">${n}</th>`).join('')}<th class="num muted dcol">Δ</th></tr>
   </thead>`;
   const body = ROWS.map(row=>{
     const isSum = !!row.ch;
@@ -85,12 +85,17 @@ function buildTable(){
     const dcell = isSum
       ? `<td class="num calc dcol">—</td>`
       : `<td class="num dcol"><input type="text" inputmode="decimal" data-r="${row.r}" data-k="dj" data-src="din.dj" data-col="6" value="0,000"></td>`;
+    // in macheta, unele randuri au textul indicatorului in coloana de cod (ex. r.110): il mutam in coloana de denumire
+    const codes = [row.sub, row.tit, row.alin].map(c=>String(c||''));
+    const lung = codes.filter(c=>c.length>8);
+    const lbl = [row.lbl, ...lung].filter(Boolean).join(' ');
     return `<tr data-row="${row.r}" class="${isSum?'sum l'+Math.min(row.lvl,3):''}">
-      <td class="code">${row.sub||''}</td><td class="code">${row.tit||''}</td><td class="code">${row.alin||''}</td>
-      <td class="lbl" style="padding-left:${pad}px"><span class="rn">${row.r}</span> ${row.lbl}</td>
+      ${codes.map(c=>`<td class="code">${c.length>8?'':c}</td>`).join('')}
+      <td class="lbl" style="padding-left:${pad}px"><span class="rn">${row.r}</span> ${lbl}</td>
       ${cells}${dcell}</tr>`;
   }).join('');
   $('#tbl').innerHTML = head + '<tbody>' + body + '</tbody>';
+  requestAnimationFrame(()=>document.documentElement.style.setProperty('--thead-h', $('#tbl thead').offsetHeight+'px'));
   $('#tbl').querySelectorAll('input').forEach(inp=>{
     inp.addEventListener('focus', e=>e.target.select());
     inp.addEventListener('input', onInput);
@@ -128,7 +133,9 @@ function render(){
     td.textContent = fmt(vals[+r] ? vals[+r][k] : 0);
   });
   document.querySelectorAll('#tbl input').forEach(inp=>{
-    if(document.activeElement!==inp) inp.value = fmt(readInput(inp));
+    const v = readInput(inp);
+    if(document.activeElement!==inp) inp.value = fmt(v);
+    inp.classList.toggle('z', Math.abs(v)<1e-9);
   });
   const q = ($('#filtru').value||'').trim().toLowerCase();
   const hz = $('#hideZero').checked;
@@ -217,8 +224,9 @@ function runChecks(vals){
   $('#checks').innerHTML = out.join('');
   const errs = out.filter(h=>h.includes('chk err')).length;
   const badge = $('#chkBadge');
-  badge.textContent = errs ? errs + (errs===1?' problemă':' probleme') : 'Fără erori';
-  badge.style.color = errs ? 'var(--err)' : 'var(--ok)';
+  badge.textContent = errs ? String(errs) : '✓';
+  badge.className = errs ? 'err' : 'ok';
+  badge.title = errs ? errs + (errs===1?' problemă':' probleme') : 'Fără erori';
 }
 function chk(ok, title, det, warnIfFail){
   const cls = ok===null ? 'warn' : ok ? 'ok' : (warnIfFail?'warn':'err');
@@ -285,6 +293,7 @@ function download(blob, name){
 async function onFile(input, target){
   const f = input.files[0]; if(!f) return;
   input.value='';
+  $('#impMenu').removeAttribute('open');
   try{
     if(f.name.toLowerCase().endsWith('.json')){
       const data = JSON.parse(await f.text());
@@ -354,7 +363,11 @@ async function ghSave(){
 /* ---------- diverse ---------- */
 let saveTimer;
 function scheduleSave(){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>store.draft.save(snapshot(true)), 600); }
-function toast(msg, bad){ const s=$('#status'); s.textContent=msg; s.style.color = bad?'var(--err)':'var(--muted)'; clearTimeout(toast._t); toast._t=setTimeout(()=>{s.textContent='';},6000); }
+function toast(msg, bad){ const s=$('#status'); s.textContent=msg; s.classList.toggle('bad', !!bad); clearTimeout(toast._t); toast._t=setTimeout(()=>{s.textContent='';},6000); }
+function setSide(open){
+  document.body.classList.toggle('side', open);
+  try{ localStorage.setItem('execbug.side', open?'1':'0'); }catch{}
+}
 function syncMetaInputs(){
   $('#an').value = state.meta.an; $('#luna').value = state.meta.luna; $('#unitate').value = state.meta.unitate;
   $('#modeCumulat').checked = state.mode==='cumulat'; $('#modeDelta').checked = state.mode==='delta';
@@ -393,8 +406,11 @@ function wire(){
     store.cfg.setToken($('#ghTok').value.trim()); ghRefresh(); });
   $('#ghPush').addEventListener('click', ghSave);
   $('#ghClose').addEventListener('click', ()=>$('#ghDlg').close());
+  $('#btnSide').addEventListener('click', ()=>setSide(!document.body.classList.contains('side')));
+  $('#btnSideClose').addEventListener('click', ()=>setSide(false));
+  document.addEventListener('click', e=>{ const m=$('#impMenu'); if(m.open && !m.contains(e.target)) m.removeAttribute('open'); });
   $('#btnTheme').addEventListener('click', ()=>{
-    const cur = document.documentElement.getAttribute('data-theme');
+    const cur = document.documentElement.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light');
     const nxt = cur==='dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', nxt);
     try{ localStorage.setItem('execbug.theme', nxt); }catch{}
@@ -403,6 +419,9 @@ function wire(){
 
 async function init(){
   try{ const t=localStorage.getItem('execbug.theme'); if(t) document.documentElement.setAttribute('data-theme',t); }catch{}
+  let side = matchMedia('(min-width:1100px)').matches;
+  try{ const v=localStorage.getItem('execbug.side'); if(v!==null) side = v==='1'; }catch{}
+  document.body.classList.toggle('side', side);
   wire(); syncMetaInputs(); buildTable();
   const d = store.draft.load();
   if(d){ try{ restore(d); toast('Ciornă restaurată din acest browser.'); }catch{} }

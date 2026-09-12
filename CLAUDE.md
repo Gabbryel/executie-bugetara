@@ -90,6 +90,16 @@ verificările trec. Pentru validarea exportului față de original, recalculeaz�
 
 Când adaugi o verificare: `chk(ok, titlu, detaliu, warnIfFail)`; `ok === null` = informativ.
 
+## Layout
+
+Aplicație pe tot ecranul, fără derulare a paginii pe desktop: antet + bară de unelte (`auto`), apoi
+`.main` = tabelul (singura zonă care derulează, cu antetul și rândul 8 lipicioase) + panoul lateral
+`.side` (sinteză + lista de control, comutat din butonul „Verificări", stare în `localStorage`). Sub 1100px
+panoul devine sertar suprapus; sub 760px pagina derulează normal. Printarea ascunde tot în afara tabelului.
+
+Rândurile cu text lung în coloanele de cod (ex. r.110, unde macheta ține denumirea în coloana „Alin.")
+se afișează cu textul mutat în coloana de denumire — `buildTable` face asta, `rows.js` rămâne neatins.
+
 ## Stil
 
 - Vanilla JS, module ES, fără bundler, fără framework. Un singur fișier CSS cu variabile de temă
