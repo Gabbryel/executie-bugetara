@@ -92,7 +92,7 @@ export async function buildXlsx(templateBuf, values, meta){
   if(meta.unitate) s = setText(s,'A1', meta.unitate);
   if(meta.titluLuna) s = setText(s,'B4', meta.titluLuna);
   zip.file(name, s);
-  return zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  return zip.generateAsync({type:'blob', compression:'DEFLATE', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 }
 
 /** Citeste valorile E..J de pe randurile 8..128 dintr-o macheta existenta. */
