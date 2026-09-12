@@ -8,6 +8,9 @@ const lunaDinText = t => { const i = LUNI.findIndex(l=>new RegExp(l,'i').test(St
 const anDinText = t => { const m = String(t||'').match(/(20\d\d)/); return m?+m[1]:null; };
 const LUNI = ['ianuarie','februarie','martie','aprilie','mai','iunie','iulie','august','septembrie','octombrie','noiembrie','decembrie'];
 const byRow = Object.fromEntries(ROWS.map(r=>[r.r, r]));
+const cuvCheie = t => String(t||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+  .replace(/[^A-Z0-9 ]/g,' ').split(/\s+/).filter(w=>w && !['SC','SRL','SA','S','C'].includes(w));
+const aceeasiUnitate = (a,b) => { const A=cuvCheie(a), B=cuvCheie(b); return A.length && B.length && (A.every(w=>B.includes(w)) || B.every(w=>A.includes(w))); };
 const LEAVES = ROWS.filter(r=>!r.ch).map(r=>r.r);
 const $ = s => document.querySelector(s);
 const blank = () => Object.fromEntries(KEYS.map(k=>[k,0]));
@@ -15,7 +18,8 @@ const blank = () => Object.fromEntries(KEYS.map(k=>[k,0]));
 let TPL = null;            // {buf, check}
 let state = newState();
 let prev = null;           // {label, leaves}
-let bc39ref = null;        // {bugetar, angajament, sursa, coloane}
+let bc39ref = null;        // {bugetar, angajament, sursa, coloane, luna, an, denumire, detalii}
+let importNote = null;     // {title, det} — inconsecvente gasite in ultima macheta importata
 
 function newState(){
   const d = new Date();
@@ -171,12 +175,23 @@ function runChecks(vals){
   if(bc39ref && (bc39ref.bugetar!=null || bc39ref.angajament!=null)){
     const db = bc39ref.bugetar!=null ? Math.round(t.e*1000)-Math.round(bc39ref.bugetar) : 0;
     const da = bc39ref.angajament!=null ? Math.round(t.f*1000)-Math.round(bc39ref.angajament) : 0;
-    const tinta = (col, cur, ref, d) => ref==null ? '' :
-      `${col} este ${fmt(cur)}, trebuie ${fmt(ref/1000)} (${fmtLei(ref)} lei)` + (d===0 ? ' ✓' : d<0 ? ` — lipsesc ${fmt(-d/1000)}` : ` — în plus ${fmt(d/1000)}`);
-    out.push(chk(db===0&&da===0,
-      'Corelația cu fișa BC39',
-      db===0&&da===0 ? `Bugetar ${fmtLei(t.e*1000)} lei și Angajament ${fmtLei(t.f*1000)} lei coincid cu BC39 (${bc39ref.sursa}).`
-        : `Rândul 8: ${[tinta('col.3',t.e,bc39ref.bugetar,db), tinta('col.4',t.f,bc39ref.angajament,da)].filter(Boolean).join(' · ')}.`));
+    const lunaBc = bc39ref.lunaNr ? `${LUNI[bc39ref.lunaNr-1]} ${bc39ref.an||''}`.trim() : null;
+    const lunaForm = `${LUNI[state.meta.luna-1]} ${state.meta.an}`;
+    const altaLuna = bc39ref.lunaNr && (bc39ref.lunaNr!==state.meta.luna || (bc39ref.an && +bc39ref.an!==+state.meta.an));
+    const peste = (ref) => (prev && ref!=null) ? ` — cu ${fmt(ref/1000 - prev.totals.h)} peste ${prev.label}` : '';
+    const tinta = (col, cur, ref, d, extra) => ref==null ? '' :
+      `${col} este ${fmt(cur)}, trebuie ${fmt(ref/1000)} (${fmtLei(ref)} lei${extra||''})` + (d===0 ? ' ✓' : d<0 ? ` — lipsesc ${fmt(-d/1000)}` : ` — în plus ${fmt(d/1000)}`);
+    if(altaLuna){
+      out.push(chk(false,'Corelația cu fișa BC39',
+        `Fișa BC39 este pentru ${lunaBc}, dar formularul este pe ${lunaForm}. Schimbă luna formularului sau importă fișa BC39 a lunii corecte.`));
+    } else {
+      const unit = bc39ref.denumire && !aceeasiUnitate(bc39ref.denumire, state.meta.unitate)
+        ? ` Atenție: fișa este pentru „${bc39ref.denumire}", formularul pentru „${state.meta.unitate}".` : '';
+      out.push(chk(db===0&&da===0,
+        'Corelația cu fișa BC39',
+        (db===0&&da===0 ? `Bugetar ${fmtLei(t.e*1000)} lei și Angajament ${fmtLei(t.f*1000)} lei coincid cu BC39 (${bc39ref.sursa}${lunaBc?', '+lunaBc:''}).`
+          : `Rândul 8: ${[tinta('col.3',t.e,bc39ref.bugetar,db,peste(bc39ref.bugetar)), tinta('col.4',t.f,bc39ref.angajament,da)].filter(Boolean).join(' · ')}.`) + unit));
+    }
     $('#tbl').querySelectorAll('tr[data-row="8"] td[data-calc]').forEach(td=>{
       const k = td.dataset.calc.split('.')[1];
       const d = k==='e' ? db : k==='f' ? da : null;
@@ -228,9 +243,15 @@ function runChecks(vals){
 
   // 7. formatul BC39
   out.push(chk(null,'Formatul fișei BC39',
-    bc39ref ? `Coloane de valori detectate: ${bc39ref.coloane.join(' · ')}. Numărul lor diferă de la o lună la alta; raportarea se face la același rând 8.`
+    bc39ref ? (()=>{
+        const d = bc39ref.detalii||{};
+        const difera = ['bugetar','angajament'].filter(k=>{ const v=Object.values(d[k]||{}); return v.length>1 && v.some(x=>Math.round(x)!==Math.round(v[0])); });
+        return `Coloane de valori: ${bc39ref.coloane.join(' · ')}; referința este „${bc39ref.coloanaRef}" (rândul 8 include PNS).` +
+          (difera.length ? ` Coloanele diferă între ele la ${difera.join(' și ')}: ` + difera.map(k=>Object.entries(d[k]).map(([c,v])=>`${c} ${fmtLei(v)}`).join(' / ')).join('; ') + ' — diferența înseamnă PNS sau alte unități.' : ' Valorile coincid între coloane.');
+      })()
             : 'Numărul coloanelor de valori din BC39 variază între luni (ex. „Spital" vs „Total" + „Spital (inclusiv PNS)"). Verifică antetul la fiecare depunere.'));
 
+  if(importNote) out.push({ cls:'warn', ic:'!', title:importNote.title, det:importNote.det });
   $('#checks').innerHTML = out.map(chkHtml).join('');
   const errs = out.filter(c=>c.cls==='err').length;
   const g = guidance(vals, out);
@@ -275,6 +296,7 @@ function snapshot(withPrev){
     total_r8:totals,
     bc39:{ bugetar:Math.round(totals.e*1000), angajament:Math.round(totals.f*1000) },
     leaves:state.leaves, din:state.din,
+    bc39ref: bc39ref || undefined,
     prev: (withPrev && prev) ? { label:prev.label, leaves:prev.leaves } : undefined
   };
 }
@@ -286,6 +308,9 @@ function restore(data){
   LEAVES.forEach(r=>{ if(data.leaves[r]) Object.assign(state.leaves[r], data.leaves[r]);
                       if(data.din&&data.din[r]) Object.assign(state.din[r], data.din[r]); });
   if(data.prev && data.prev.leaves) setPrev(data.prev.leaves, data.prev.label||'lună precedentă');
+  if(data.bc39ref && (data.bc39ref.bugetar!=null || data.bc39ref.angajament!=null)) setBc39(data.bc39ref);
+  else { bc39ref = null; $('#bcRef').textContent=''; }
+  importNote = null;
   // Modul delta se sprijina pe luna precedenta: fara ea, valorile cumulate ar fi recalculate gresit.
   if(state.mode==='delta' && !prev){
     state.mode='cumulat';
@@ -300,6 +325,24 @@ function setPrev(leaves, label){
   $('#prevInfo').textContent = 'Lună precedentă: ' + label;
   $('#modeDelta').disabled = false; $('#modeSeg').hidden = false;
   if($('#tbl').rows.length) render();
+}
+
+function setBc39(b){
+  const an = b.an ? (String(b.an).match(/\d{4}/)||[])[0] : null;
+  bc39ref = { ...b, lunaNr: lunaDinText(b.luna), an: an ? +an : null };
+  $('#bcRef').textContent = `BC39 (${b.sursa||'importat'}): Bugetar ${fmtLei(b.bugetar||0)} · Angajament ${fmtLei(b.angajament||0)} lei` +
+    (bc39ref.lunaNr ? ` · ${LUNI[bc39ref.lunaNr-1]} ${bc39ref.an||''}` : '') + (b.denumire ? ` · ${b.denumire}` : '');
+}
+/** Compara totalurile statice din macheta importata cu suma randurilor lor. Intoarce lista diferentelor. */
+function verificaConsecventa(m){
+  const vals = aggregate(m.values);
+  const dif = [];
+  ROWS.filter(r=>r.ch).forEach(row=>{
+    const st = m.statice[row.r]||{};
+    KEYS.forEach((k,i)=>{ const f=st[k]; if(f==null) return;
+      const c = vals[row.r][k]; if(Math.abs(f-c)>0.0005) dif.push(`r.${row.r} col.${i+3}: în fișier ${fmt(f)}, suma rândurilor ${fmt(c)}`); });
+  });
+  return dif;
 }
 
 /* ---------- I/O ---------- */
@@ -336,23 +379,35 @@ async function onFile(input, target){
     if(target==='bc39'){
       const b = await readBC39(buf);
       if(b.bugetar==null && b.angajament==null) throw new Error('Nu am găsit rândurile Bugetar/Angajament în fișier.');
-      bc39ref = {...b, sursa:f.name};
-      $('#bcRef').textContent = `BC39 importat: Bugetar ${fmtLei(b.bugetar||0)} · Angajament ${fmtLei(b.angajament||0)}`;
-      render(); toast('Fișa BC39 importată.');
+      setBc39({...b, sursa:f.name});
+      // formular gol: preia luna si anul din fisa
+      const vals = recompute();
+      const gol = KEYS.every(k=>Math.abs(vals[8][k])<1e-9);
+      let msg = 'Fișa BC39 importată';
+      if(bc39ref.lunaNr){
+        const eticheta = `${LUNI[bc39ref.lunaNr-1]} ${bc39ref.an||''}`.trim();
+        if(gol && !prev){ state.meta.luna = bc39ref.lunaNr; if(bc39ref.an) state.meta.an = bc39ref.an; syncMetaInputs(); msg += ` — formularul a fost setat pe ${eticheta}`; }
+        else msg += ` (${eticheta})`;
+      }
+      render(); scheduleSave(); toast(msg+'.');
       return;
     }
     const m = await readMacheta(buf);
     if(Object.keys(m.values).length < 50) throw new Error('Fișierul nu pare a fi macheta CAS (foaia BC).');
     const lm = lunaDinText(m.luna), la = anDinText(m.luna);
     const eticheta = lm ? `${LUNI[lm-1]} ${la||''}`.trim() : (m.luna || f.name);
-    if(target==='prev'){ setPrev(m.values, eticheta); toast('Lună precedentă încărcată: '+eticheta); }
+    const dif = verificaConsecventa(m);
+    importNote = dif.length ? { title:`Macheta importată (${eticheta}) are totaluri care nu corespund sumei rândurilor`,
+      det: dif.slice(0,6).join(' · ') + (dif.length>6?` · încă ${dif.length-6}`:'') + '. Aplicația recalculează totalurile de jos în sus; verifică rândurile respective în fișierul sursă.' } : null;
+    if(target==='prev'){ setPrev(m.values, eticheta); scheduleSave(); toast('Lună precedentă încărcată: '+eticheta+(dif.length?' — are totaluri inconsecvente, vezi verificările':'')); }
     else {
       LEAVES.forEach(r=>{ if(m.values[r]) Object.assign(state.leaves[r], m.values[r]); });
       if(LEAVES.some(r=>{ const v=state.leaves[r]; return Math.abs(v.e-v.h)>0.0005 || Math.abs(v.g-v.h)>0.0005; })){
         state.linkEG = false; toast('Macheta are col. 3 sau 5 diferite de col. 6 pe unele rânduri — am dezlegat coloanele.');
       }
       if(lm) state.meta.luna = lm; if(la) state.meta.an = la;
-      state.mode='cumulat'; syncMetaInputs(); buildTable(); render();
+      if(m.unitate && m.unitate.trim()) state.meta.unitate = m.unitate.trim();
+      state.mode='cumulat'; syncMetaInputs(); buildTable(); render(); scheduleSave();
       toast('Machetă încărcată ca lună curentă'+(lm?' ('+eticheta+')':'')+'.');
     }
   }catch(err){ toast(err.message, true); }
@@ -424,7 +479,7 @@ function wire(){
   $('#btnXlsx').addEventListener('click', exportXlsx);
   $('#btnPdf').addEventListener('click', ()=>window.print());
   $('#btnJson').addEventListener('click', exportJson);
-  $('#btnNew').addEventListener('click', ()=>{ if(confirm('Golești formularul curent?')){ state=newState(); store.draft.clear(); syncMetaInputs(); buildTable(); render(); }});
+  $('#btnNew').addEventListener('click', ()=>{ if(confirm('Golești formularul curent?')){ state=newState(); store.draft.clear(); bc39ref=null; importNote=null; $('#bcRef').textContent=''; syncMetaInputs(); buildTable(); render(); }});
   $('#fPrev').addEventListener('change', e=>onFile(e.target,'prev'));
   $('#fCur').addEventListener('change', e=>onFile(e.target,'cur'));
   $('#fBc').addEventListener('change', e=>onFile(e.target,'bc39'));

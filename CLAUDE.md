@@ -26,6 +26,11 @@ Corelații verificate pe două luni reale (aprilie și iulie 2026):
 - Col. 4 poate fi **și sub, și peste** col. 3 — nu presupune un semn fix.
 - Rândul 83 (programe naționale de sănătate) e 0: unitatea nu derulează PNS.
 - Formatul BC39 variază între luni (o coloană `Spital` sau două: `Total` + `Spital (inclusiv PNS)`).
+  Fișa are și `An`, `Luna (cumulat)`, `Denumire` (ex. „SPINAL CARE SRL"), `Cod`; rândul `Angajament` vine
+  înaintea celui `Bugetar`. Referința pentru rândul 8 este coloana `Total` când există (r.8 include PNS).
+- Macheta de aprilie 2026 are o inconsecvență în fișierul sursă: r.32 col.4 = 15,000, dar copiii lui
+  însumează 17,550; BC39 (1.037.385) urmează valoarea de la r.8, adică versiunea cu 15,000. Aplicația
+  agregă de jos în sus, deci afișează 1.039,935 și semnalează diferența — corect, nu e o eroare a ei.
 
 Detalii complete: `README.md`.
 
@@ -105,6 +110,12 @@ Principiu: **la vedere stau doar tabelul și exportul**; restul e ascuns până 
   (butonul „Verificări" sau linkul din ghidare). Escape / clic în afară îl închide.
 - Tabelul e singura zonă care derulează; antetul și rândul 8 sunt lipicioase. Celulele col. 3/4 ale
   rândului 8 se colorează roșu/verde față de BC39.
+- **La importul BC39** (`setBc39` + verificarea 1): se citesc luna, anul și denumirea; formularul gol preia
+  luna/anul din fișă; dacă luna diferă de a formularului, verificarea e eroare (nu se compară cifre din luni
+  diferite); denumirea se potrivește pe cuvinte-cheie (fără SC/SRL); cu lună precedentă încărcată, ținta
+  arată și „cu X peste <luna precedentă>". Referința BC39 se salvează în ciornă/JSON (`bc39ref`).
+- **La importul unei machete** (`verificaConsecventa`): totalurile statice din fișier se compară cu suma
+  rândurilor-copil; diferențele apar ca verificare informativă (`importNote`) până la următorul import.
 - Opțiunea „leagă col. 3 și 5 de col. 6" se aplică în ambele moduri; la importul unei machete în care
   col. 3/5 diferă de col. 6 pe rânduri, se dezleagă automat ca să nu suprascrie valorile.
 - Sub 760px pagina derulează normal. Printarea ascunde tot în afara tabelului.

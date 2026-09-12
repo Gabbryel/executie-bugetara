@@ -121,7 +121,10 @@ export async function readMacheta(buf){
     COLS.forEach((c,i)=>{ const n=getNumber(xml,c+r); v[KEYS[i]] = n===null?0:n; if(n!==null) any=true; });
     if(any) out[r]=v;
   }
-  return { values: out, luna: await readCellText(buf, xml, 'B4') };
+  // valorile statice din fisier, cu null pentru celulele cu formula (folosite la verificarea consecventei)
+  const statice = {};
+  for(let r=8;r<=128;r++){ const v={}; COLS.forEach((c,i)=>{ v[KEYS[i]] = getNumber(xml,c+r); }); statice[r]=v; }
+  return { values: out, statice, luna: await readCellText(buf, xml, 'B4'), unitate: await readCellText(buf, xml, 'A1') };
 }
 
 /** Citeste fisa BC39 (xlsx): intoarce {bugetar, angajament, coloane:[...]} in lei. */
@@ -148,18 +151,24 @@ export async function readBC39(buf){
   const cols = Object.keys(head).sort();
   const tipCol = cols.find(c=>/tip credit/i.test(String(head[c]))) || 'E';
   const valCols = cols.filter(c=>c>tipCol);
-  const out = { bugetar:null, angajament:null, coloane: valCols.map(c=>String(head[c])), luna:null, an:null };
+  // randul 8 al machetei include programele nationale, deci referinta e coloana „Total" daca exista
+  const refCol = valCols.find(c=>/^total/i.test(String(head[c]))) || valCols[0];
+  const out = { bugetar:null, angajament:null, coloane: valCols.map(c=>String(head[c])), coloanaRef: String(head[refCol]||''),
+                detalii:{ bugetar:{}, angajament:{} }, luna:null, an:null, denumire:null };
+  const lc = cols.find(c=>/luna/i.test(String(head[c])));
+  const ac = cols.find(c=>/^an$/i.test(String(head[c])));
+  const dc = cols.find(c=>/denumire/i.test(String(head[c])));
   for(const rn of Object.keys(rows)){
     if(rn==='1') continue;
     const rw = rows[rn];
     const tip = String(rw[tipCol]||'').toLowerCase();
-    const val = parseFloat(rw[valCols[0]]);
+    const val = parseFloat(rw[refCol]);
     if(!isFinite(val)) continue;
-    if(tip.includes('bugetar')) out.bugetar = val;
-    if(tip.includes('angajament')) out.angajament = val;
-    const lc = cols.find(c=>/luna/i.test(String(head[c])));
-    const ac = cols.find(c=>/^an$/i.test(String(head[c])));
-    if(lc) out.luna = rw[lc]; if(ac) out.an = rw[ac];
+    const key = tip.includes('bugetar') ? 'bugetar' : tip.includes('angajament') ? 'angajament' : null;
+    if(!key) continue;
+    out[key] = val;
+    valCols.forEach(c=>{ const n=parseFloat(rw[c]); if(isFinite(n)) out.detalii[key][String(head[c])] = n; });
+    if(lc) out.luna = rw[lc]; if(ac) out.an = rw[ac]; if(dc) out.denumire = rw[dc];
   }
   return out;
 }
