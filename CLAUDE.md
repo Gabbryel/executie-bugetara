@@ -110,6 +110,10 @@ Principiu: **la vedere stau doar tabelul și exportul**; restul e ascuns până 
   (butonul „Verificări" sau linkul din ghidare). Escape / clic în afară îl închide.
 - Tabelul e singura zonă care derulează; antetul și rândul 8 sunt lipicioase. Celulele col. 3/4 ale
   rândului 8 se colorează roșu/verde față de BC39.
+- **Rândul „Țintă BC39"** (`renderTinta`, al doilea rând din `thead`, lipicios sub antet): după import, valorile
+  din fișă apar în tabel exact în coloanele lor (col. 3 = Bugetar, col. 4 = Angajament, col. 5 și 6 = Bugetar,
+  col. 7 = țintă − luna precedentă), cu „rămân X" / „✓ atins" sub fiecare. Utilizatorul se așteaptă să vadă
+  cifrele BC39 în primele rânduri ale machetei, nu doar într-o propoziție.
 - **La importul BC39** (`setBc39` + verificarea 1): se citesc luna, anul și denumirea; formularul gol preia
   luna/anul din fișă; dacă luna diferă de a formularului, verificarea e eroare (nu se compară cifre din luni
   diferite); denumirea se potrivește pe cuvinte-cheie (fără SC/SRL); cu lună precedentă încărcată, ținta

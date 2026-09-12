@@ -76,6 +76,10 @@ function buildTable(){
       ${H('Luna curentă',7)}${H('Cheltuieli efective',8)}
       ${H('Δ efective luna','Δ','dcol')}
     </tr>
+    <tr class="tinta" id="tintaRow" hidden>
+      <th class="code" colspan="3">BC39</th><th class="lbl" id="tintaLbl"></th>
+      ${KEYS.map(k=>`<th class="num" data-tinta="${k}"></th>`).join('')}<th class="num dcol"></th>
+    </tr>
   </thead>`;
   const body = ROWS.map(row=>{
     const isSum = !!row.ch;
@@ -101,7 +105,7 @@ function buildTable(){
       ${cells}${dcell}</tr>`;
   }).join('');
   $('#tbl').innerHTML = head + '<tbody>' + body + '</tbody>';
-  requestAnimationFrame(()=>document.documentElement.style.setProperty('--thead-h', $('#tbl thead').offsetHeight+'px'));
+  masoaraAntet();
   $('#tbl').querySelectorAll('input').forEach(inp=>{
     inp.addEventListener('focus', e=>e.target.select());
     inp.addEventListener('input', onInput);
@@ -131,9 +135,39 @@ function onKey(e){
   const n = all[i+move]; if(n){ n.focus(); }
 }
 
+function masoaraAntet(){
+  requestAnimationFrame(()=>{
+    const th = $('#tbl thead'); if(!th) return;
+    document.documentElement.style.setProperty('--thead-h', th.offsetHeight+'px');
+    document.documentElement.style.setProperty('--th1-h', th.rows[0].offsetHeight+'px');
+  });
+}
+const bc39AltaLuna = () => !!(bc39ref && bc39ref.lunaNr && (bc39ref.lunaNr!==state.meta.luna || (bc39ref.an && +bc39ref.an!==+state.meta.an)));
+
+/** Randul „Tinta BC39": valorile din fisa in coloanele lor (r.8 col.3 = Bugetar, col.4 = Angajament) si cat mai ramane. */
+function renderTinta(vals){
+  const tr = $('#tintaRow'); if(!tr) return;
+  const arata = bc39ref && !bc39AltaLuna() && (bc39ref.bugetar!=null || bc39ref.angajament!=null);
+  if(tr.hidden !== !arata){ tr.hidden = !arata; masoaraAntet(); }
+  if(!arata) return;
+  const bug = bc39ref.bugetar!=null ? bc39ref.bugetar/1000 : null;
+  const ang = bc39ref.angajament!=null ? bc39ref.angajament/1000 : null;
+  const t = { e:bug, f:ang, g:bug, h:bug, i:(prev && bug!=null) ? r3(bug - prev.totals.h) : null, j:null };
+  const eticheta = bc39ref.lunaNr ? `${LUNI[bc39ref.lunaNr-1]} ${bc39ref.an||''}`.trim() : bc39ref.sursa;
+  $('#tintaLbl').textContent = 'Țintă din fișa BC39 (' + eticheta + ')' + (prev ? ' · col. 7 = țintă − ' + prev.label : '');
+  tr.querySelectorAll('th[data-tinta]').forEach(th=>{
+    const k = th.dataset.tinta, tinta = t[k];
+    if(tinta==null){ th.innerHTML = '<span class="muted">—</span>'; th.className='num'; return; }
+    const d = Math.round(tinta*1000) - Math.round(vals[8][k]*1000);
+    th.innerHTML = `<b>${fmt(tinta)}</b><small>${d===0 ? '✓ atins' : d>0 ? 'rămân '+fmt(d/1000) : 'în plus '+fmt(-d/1000)}</small>`;
+    th.className = 'num ' + (d===0 ? 'good' : 'bad');
+  });
+}
+
 /* ---------- randare ---------- */
 function render(){
   const vals = recompute();
+  renderTinta(vals);
   document.querySelectorAll('#tbl td[data-calc]').forEach(td=>{
     const [r,k] = td.dataset.calc.split('.');
     td.textContent = fmt(vals[+r] ? vals[+r][k] : 0);
@@ -177,7 +211,7 @@ function runChecks(vals){
     const da = bc39ref.angajament!=null ? Math.round(t.f*1000)-Math.round(bc39ref.angajament) : 0;
     const lunaBc = bc39ref.lunaNr ? `${LUNI[bc39ref.lunaNr-1]} ${bc39ref.an||''}`.trim() : null;
     const lunaForm = `${LUNI[state.meta.luna-1]} ${state.meta.an}`;
-    const altaLuna = bc39ref.lunaNr && (bc39ref.lunaNr!==state.meta.luna || (bc39ref.an && +bc39ref.an!==+state.meta.an));
+    const altaLuna = bc39AltaLuna();
     const peste = (ref) => (prev && ref!=null) ? ` — cu ${fmt(ref/1000 - prev.totals.h)} peste ${prev.label}` : '';
     const tinta = (col, cur, ref, d, extra) => ref==null ? '' :
       `${col} este ${fmt(cur)}, trebuie ${fmt(ref/1000)} (${fmtLei(ref)} lei${extra||''})` + (d===0 ? ' ✓' : d<0 ? ` — lipsesc ${fmt(-d/1000)}` : ` — în plus ${fmt(d/1000)}`);
