@@ -69,6 +69,14 @@ descrescător. Rândul 38 („Contribuții, din care:") e static în șablon, da
    commit-uiesc** — testele le primesc prin variabile de mediu.
 6. **Fără dependențe externe la runtime.** Tot ce se încarcă vine din depozit; aplicația merge offline.
 
+## Versionarea fișierelor (cache)
+
+GitHub Pages și browserul țin în cache `app.js`, modulele și CSS-ul. Toate adresele lor poartă `?v=<data-ora>`
+(`index.html` și importurile din `app.js`/`xlsx.js`). `tools/versiune.sh` pune o valoare nouă peste tot;
+`.githooks/pre-commit` îl rulează la fiecare commit. **La o clonă nouă**: `git config core.hooksPath .githooks`.
+Versiunea încărcată se vede în meniul ⋯, jos („versiune 20260913-101500"), ca să confirmi că ai codul nou.
+Nu adăuga importuri fără `?v=0` (scriptul înlocuiește orice valoare, dar trebuie să existe sufixul).
+
 ## Cum rulezi și testezi
 
 ```bash

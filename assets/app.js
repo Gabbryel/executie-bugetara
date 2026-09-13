@@ -1,7 +1,7 @@
-import { ROWS } from './rows.js';
-import { parseNum, r3, fmt, fmtLei } from './num.js';
-import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js';
-import * as store from './store.js';
+import { ROWS } from './rows.js?v=20260913-133907';
+import { parseNum, r3, fmt, fmtLei } from './num.js?v=20260913-133907';
+import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20260913-133907';
+import * as store from './store.js?v=20260913-133907';
 
 const KEYS = ['e','f','g','h','i','j'];
 const lunaDinText = t => { const i = LUNI.findIndex(l=>new RegExp(l,'i').test(String(t||''))); return i<0?null:i+1; };
@@ -313,7 +313,7 @@ function runChecks(vals){
   const g = guidance(vals, out);
   const gd = $('#guide');
   gd.className = 'guide '+g.cls;
-  gd.innerHTML = `<span class="ic"></span><span class="tx">${g.text}</span>` + (g.more ? `<button class="lnk" id="guideMore">Toate verificările</button>` : '');
+  gd.innerHTML = `<span class="ic"></span><span class="tx">${g.text}</span>` + (g.more ? `<button class="lnk" id="guideMore">Toate verificările</button>` : '') + (g.reload ? `<button class="btn pri" id="guideReload">Reîncarcă aplicația</button>` : '');
   const badge = $('#chkBadge');
   badge.textContent = errs ? String(errs) : '✓';
   badge.className = errs ? 'err' : 'ok';
@@ -331,6 +331,7 @@ const chkHtml = c => `<div class="chk ${c.cls}"><span class="ic">${c.ic}</span><
 function guidance(vals, checks){
   const t = vals[8];
   const gol = KEYS.every(k=>Math.abs(t[k])<1e-9);
+  if(versiuneNoua) return { cls:'warn', text:`Este publicată o versiune nouă a aplicației (${versiuneNoua}); rulezi ${VERSIUNE}. Ciorna se păstrează.`, reload:true };
   if(TPL && !TPL.check.ok) return { cls:'err', text:'Șablonul este defect: '+TPL.check.reason+'. Exportul ar produce o machetă greșită.' };
   if(gol && !prev && !bc39ref) return { cls:'info', text:'Începe prin a importa luna precedentă sau macheta lunii curente din meniul ⋯, apoi fișa BC39 pentru verificare. Sau completează direct rândurile.' };
   const err = checks.find(c=>c.cls==='err');
@@ -549,17 +550,34 @@ function wire(){
   $('#ghPush').addEventListener('click', ghSave);
   $('#ghClose').addEventListener('click', ()=>$('#ghDlg').close());
   $('#btnSide').addEventListener('click', ()=>setSide(!document.body.classList.contains('side-open')));
-  $('#guide').addEventListener('click', e=>{ if(e.target.id==='guideMore') setSide(true); });
+  $('#guide').addEventListener('click', e=>{ if(e.target.id==='guideMore') setSide(true); if(e.target.id==='guideReload') reincarca(); });
   $('#btnSideClose').addEventListener('click', ()=>setSide(false));
   document.addEventListener('keydown', e=>{ if(e.key==='Escape' && document.body.classList.contains('side-open')) setSide(false); });
   document.addEventListener('click', e=>{ if(document.body.classList.contains('side-open') && !e.target.closest('.side') && !e.target.closest('#btnSide') && e.target.id!=='guideMore') setSide(false); });
   document.addEventListener('click', e=>{ const m=$('#mainMenu'); if(!m.open) return; if(!m.contains(e.target) || e.target.closest('.menu-list button')) m.removeAttribute('open'); });
+  $('#versiune').textContent = 'versiune ' + VERSIUNE;
   $('#btnTheme').addEventListener('click', ()=>{
     const cur = document.documentElement.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light');
     const nxt = cur==='dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', nxt);
     try{ localStorage.setItem('execbug.theme', nxt); }catch{}
   });
+}
+
+/* ---------- versiune: detecteaza codul nou publicat, chiar daca pagina a venit din cache ---------- */
+const VERSIUNE = new URL(import.meta.url).searchParams.get('v') || 'necunoscută';
+let versiuneNoua = null;
+async function verificaVersiunea(){
+  try{
+    const html = await (await fetch('./index.html', {cache:'no-store'})).text();
+    const m = html.match(/assets\/app\.js\?v=([0-9A-Za-z._-]+)/);
+    if(m && m[1] !== VERSIUNE){ versiuneNoua = m[1]; render(); }
+  }catch{}
+}
+function reincarca(){
+  // reload-ul normal revalideaza pagina; daca browserul tot o tine, adresa cu parametru nou o forteaza
+  try{ store.draft.save(snapshot(true)); }catch{}
+  location.replace(location.pathname + '?r=' + Date.now());
 }
 
 async function init(){
@@ -571,5 +589,9 @@ async function init(){
   try{ TPL = await loadTemplate('./template/macheta.xlsx'); }
   catch(e){ toast('Șablon indisponibil: '+e.message, true); }
   render();
+  if(location.search.includes('r=')) history.replaceState(null, '', location.pathname);
+  verificaVersiunea();
+  setInterval(verificaVersiunea, 10*60*1000);
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) verificaVersiunea(); });
 }
 init();

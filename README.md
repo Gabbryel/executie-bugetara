@@ -60,6 +60,10 @@ git push -u origin main
 ```
 
 Apoi: **Settings → Pages → Source: Deploy from a branch → `main` / `(root)`**.
+
+O singură dată, după clonare: `git config core.hooksPath .githooks`. Hook-ul pune la fiecare commit o versiune
+nouă în adresele fișierelor JS și CSS, altfel browserul continuă să ruleze codul vechi din cache după publicare.
+Versiunea încărcată apare în meniul ⋯.
 Adresa va fi `https://<user>.github.io/executie-bugetara/`. Toate căile din aplicație sunt relative, deci funcționează și sub un subdirector.
 
 ## Structura

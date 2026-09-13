@@ -1,0 +1,6 @@
+#!/bin/sh
+# Pune o versiune noua in adresele fisierelor la fiecare commit. Activare (o singura data, per clona):
+#   git config core.hooksPath .githooks
+v=$(sh tools/versiune.sh) || exit 1
+git add index.html assets/app.js assets/xlsx.js assets/store.js
+echo "versiune: $v"
