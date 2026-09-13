@@ -106,6 +106,7 @@ function buildTable(){
   }).join('');
   $('#tbl').innerHTML = head + '<tbody>' + body + '</tbody>';
   masoaraAntet();
+  legaEvidentiereColoana();
   $('#tbl').querySelectorAll('input').forEach(inp=>{
     inp.addEventListener('focus', e=>e.target.select());
     inp.addEventListener('input', onInput);
@@ -162,6 +163,27 @@ function renderTinta(vals){
     th.innerHTML = `<b>${fmt(tinta)}</b><small>${d===0 ? '✓ atins' : d>0 ? 'rămân '+fmt(d/1000) : 'în plus '+fmt(-d/1000)}</small>`;
     th.className = 'num ' + (d===0 ? 'good' : 'bad');
   });
+}
+
+/* Evidentierea coloanei sub cursor: un overlay translucid pozitionat pe coloana celulei peste care e mouse-ul. */
+function legaEvidentiereColoana(){
+  const tw = $('.tablewrap'), tbl = $('#tbl');
+  let hl = tw.querySelector('.colhl');
+  if(!hl){ hl = document.createElement('div'); hl.className='colhl'; tw.appendChild(hl); }
+  let ultima = -1;
+  const ths = () => tbl.tHead.rows[0].cells;
+  const ascunde = () => { hl.style.display='none'; if(ultima>=0 && ths()[ultima]) ths()[ultima].classList.remove('hl'); ultima=-1; };
+  tbl.onmouseover = e => {
+    const cell = e.target.closest('td,th'); if(!cell || cell.parentElement.classList.contains('tinta')) return;
+    const idx = cell.cellIndex;
+    if(idx < 4){ ascunde(); return; }                  // doar coloanele de valori
+    if(idx === ultima) return;
+    if(ultima>=0 && ths()[ultima]) ths()[ultima].classList.remove('hl');
+    const ref = ths()[idx]; if(!ref) return;
+    ultima = idx; ref.classList.add('hl');
+    hl.style.left = ref.offsetLeft+'px'; hl.style.width = ref.offsetWidth+'px'; hl.style.height = tbl.offsetHeight+'px'; hl.style.display='block';
+  };
+  tbl.onmouseleave = ascunde;
 }
 
 /* ---------- randare ---------- */
