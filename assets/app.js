@@ -1,7 +1,7 @@
-import { ROWS } from './rows.js?v=20260913-135511';
-import { parseNum, r3, fmt, fmtLei } from './num.js?v=20260913-135511';
-import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20260913-135511';
-import * as store from './store.js?v=20260913-135511';
+import { ROWS } from './rows.js?v=20260913-140351';
+import { parseNum, r3, fmt, fmtLei } from './num.js?v=20260913-140351';
+import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20260913-140351';
+import * as store from './store.js?v=20260913-140351';
 
 const KEYS = ['e','f','g','h','i','j'];
 const lunaDinText = t => { const i = LUNI.findIndex(l=>new RegExp(l,'i').test(String(t||''))); return i<0?null:i+1; };
@@ -373,7 +373,7 @@ function restore(data){
     state.mode='cumulat';
     toast('Luna precedentă lipsește din fișier — am trecut pe modul „cumulat", valorile rămân neschimbate.', true);
   }
-  syncMetaInputs(); buildTable(); render();
+  syncMetaInputs(); buildTable(); render(); scheduleSave();
 }
 function setPrev(leaves, label){
   const L = {}; LEAVES.forEach(r=>{ L[r] = {...blank(), ...(leaves[r]||{})}; });
