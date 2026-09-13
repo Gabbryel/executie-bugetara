@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Execuție bugetară — machetă CAS</title>
-<link rel="stylesheet" href="assets/styles.css?v=20260913-140351">
+<link rel="stylesheet" href="assets/styles.css?v=20260913-141302">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>📊</text></svg>">
 </head>
 <body>
@@ -24,6 +24,7 @@
     <div class="bar">
       <input type="search" id="filtru" class="search" placeholder="Caută rând…" title="Caută după denumire sau numărul rândului">
       <button class="btn quiet" id="btnSide" title="Lista de control">Verificări <b id="chkBadge"></b></button>
+      <button class="btn" id="btnSave" title="Salvează luna în arhivă (Ctrl/Cmd+S)">Salvează luna</button>
       <button class="btn pri" id="btnXlsx">Export .xlsx</button>
       <details class="menu" id="mainMenu">
         <summary class="btn quiet icon" title="Meniu">⋯</summary>
@@ -33,6 +34,8 @@
           <label>Machetă lună curentă (.xlsx / .json)<input type="file" id="fCur" accept=".xlsx,.json" hidden></label>
           <label>Fișa BC39 (.xlsx)<input type="file" id="fBc" accept=".xlsx" hidden></label>
           <div class="menu-i muted" id="prevInfo">Nicio lună precedentă încărcată</div>
+          <div class="menu-t">Luni</div>
+          <button id="btnLuni">Luni salvate…</button>
           <div class="menu-t">Exportă</div>
           <button id="btnJson">Export JSON</button>
           <button id="btnPdf">Tipărire / PDF</button>
@@ -84,6 +87,15 @@
   <p class="status noprint" id="status"></p>
 </div>
 
+<dialog id="luniDlg">
+  <div class="dlg-h"><h3>Luni salvate</h3><button class="btn" id="luniClose">Închide</button></div>
+  <div class="dlg-b">
+    <p class="muted" style="margin-top:0">Deschide o lună ca să o modifici, apoi apasă „Salvează luna". Salvarea suprascrie versiunea acelei luni; lunile diferite nu se ating între ele.</p>
+    <div id="luniList" class="gh-list" style="max-height:340px"></div>
+    <p class="status-inline" id="luniStatus"></p>
+  </div>
+</dialog>
+
 <dialog id="ghDlg">
   <div class="dlg-h"><h3>Bază de date în GitHub</h3><button class="btn" id="ghClose">Închide</button></div>
   <div class="dlg-b">
@@ -105,7 +117,7 @@
   </div>
 </dialog>
 
-<script src="assets/jszip.min.js?v=20260913-140351"></script>
-<script type="module" src="assets/app.js?v=20260913-140351"></script>
+<script src="assets/jszip.min.js?v=20260913-141302"></script>
+<script type="module" src="assets/app.js?v=20260913-141302"></script>
 </body>
 </html>

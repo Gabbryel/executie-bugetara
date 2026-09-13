@@ -15,6 +15,16 @@ export const cfg = {
   setToken(t){ try{ t ? localStorage.setItem(LS_TOK,t) : localStorage.removeItem(LS_TOK); }catch{} }
 };
 
+// Arhiva lunilor salvate in acest browser: { 'AAAA-LL': snapshot }
+const LS_LUNI = 'execbug.luni';
+export const luni = {
+  all(){ try{ return JSON.parse(localStorage.getItem(LS_LUNI)||'{}'); }catch{ return {}; } },
+  keys(){ return Object.keys(this.all()).sort().reverse(); },
+  get(k){ return this.all()[k] || null; },
+  set(k, data){ const a=this.all(); a[k]=data; localStorage.setItem(LS_LUNI, JSON.stringify(a)); },
+  remove(k){ const a=this.all(); delete a[k]; try{ localStorage.setItem(LS_LUNI, JSON.stringify(a)); }catch{} }
+};
+
 export const draft = {
   save(state){ try{ localStorage.setItem(LS_DRAFT, JSON.stringify(state)); }catch{} },
   load(){ try{ return JSON.parse(localStorage.getItem(LS_DRAFT)||'null'); }catch{ return null; } },

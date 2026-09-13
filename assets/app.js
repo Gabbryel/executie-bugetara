@@ -1,7 +1,7 @@
-import { ROWS } from './rows.js?v=20260913-140351';
-import { parseNum, r3, fmt, fmtLei } from './num.js?v=20260913-140351';
-import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20260913-140351';
-import * as store from './store.js?v=20260913-140351';
+import { ROWS } from './rows.js?v=20260913-141302';
+import { parseNum, r3, fmt, fmtLei } from './num.js?v=20260913-141302';
+import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20260913-141302';
+import * as store from './store.js?v=20260913-141302';
 
 const KEYS = ['e','f','g','h','i','j'];
 const lunaDinText = t => { const i = LUNI.findIndex(l=>new RegExp(l,'i').test(String(t||''))); return i<0?null:i+1; };
@@ -470,6 +470,60 @@ async function onFile(input, target){
   }catch(err){ toast(err.message, true); }
 }
 
+/* ---------- salvarea lunii: arhiva din browser + GitHub daca e configurat ---------- */
+const cheiaLunii = () => `${state.meta.an}-${String(state.meta.luna).padStart(2,'0')}`;
+const numeLunii = k => { const [a,l]=k.split('-'); return `${LUNI[(+l||1)-1]} ${a}`; };
+const amprenta = () => JSON.stringify({ m:state.meta, mode:state.mode, l:state.linkEG, leaves:state.leaves, din:state.din, p:state.prevLabel });
+let amprentaSalvata = null;
+function marcheazaModificari(){
+  const sal = store.luni.get(cheiaLunii());
+  const dirty = !sal || amprentaSalvata !== amprenta();
+  $('#btnSave').classList.toggle('dirty', dirty);
+  $('#btnSave').title = dirty ? 'Modificări nesalvate — salvează luna (Ctrl/Cmd+S)' : 'Luna este salvată (' + new Date(sal.salvat||sal.generat).toLocaleString('ro-RO') + ')';
+}
+async function salveazaLuna(){
+  const k = cheiaLunii();
+  const data = snapshot(true); data.salvat = new Date().toISOString();
+  try{ store.luni.set(k, data); }
+  catch(e){ return toast('Nu am putut salva în browser: '+e.message, true); }
+  amprentaSalvata = amprenta(); marcheazaModificari();
+  const c = store.cfg.get();
+  if(c.owner && c.repo && store.cfg.token()){
+    toast(`Salvat în browser (${numeLunii(k)}). Trimit și în GitHub…`);
+    try{ await store.saveMonth(k+'.json', snapshot(), `Execuție bugetară ${numeLunii(k)}`); toast(`Salvat: ${numeLunii(k)} — în browser și în GitHub (${c.owner}/${c.repo}).`); }
+    catch(e){ toast(`Salvat în browser, dar nu și în GitHub: ${e.message}`, true); }
+  } else {
+    toast(`Salvat în acest browser: ${numeLunii(k)}. Pentru o copie în GitHub, configurează depozitul din meniu.`);
+  }
+}
+function deschideLuna(k, ca){
+  const d = store.luni.get(k); if(!d) return toast('Luna nu există în arhivă.', true);
+  if(ca==='prev'){ setPrev(d.leaves||{}, numeLunii(k)); scheduleSave(); toast('Lună precedentă: '+numeLunii(k)); }
+  else { restore(d); amprentaSalvata = amprenta(); marcheazaModificari(); toast('Deschis pentru modificări: '+numeLunii(k)); }
+  $('#luniDlg').close();
+}
+function listeazaLuni(){
+  const el = $('#luniList'); const keys = store.luni.keys(); const cur = cheiaLunii();
+  if(!keys.length){ el.innerHTML = '<div class="muted">Nicio lună salvată încă. Completează formularul și apasă „Salvează luna".</div>'; return; }
+  el.innerHTML = keys.map(k=>{ const d=store.luni.get(k); const t=d.total_r8||{};
+    return `<div class="luna-i ${k===cur?'cur':''}">
+      <div><div class="n">${numeLunii(k)}${k===cur?' <span class="muted">(în lucru)</span>':''}</div>
+        <div class="d">plăți cumulate ${fmt(t.h||0)} · luna ${fmt(t.i||0)} · salvat ${new Date(d.salvat||d.generat).toLocaleString('ro-RO')}</div></div>
+      <div class="acts">
+        <button class="btn" data-act="open" data-k="${k}">Deschide</button>
+        <button class="btn" data-act="prev" data-k="${k}">Ca lună precedentă</button>
+        <button class="btn" data-act="json" data-k="${k}">JSON</button>
+        <button class="btn" data-act="del" data-k="${k}">Șterge</button>
+      </div></div>`; }).join('');
+  el.querySelectorAll('button[data-act]').forEach(b=>b.addEventListener('click', ()=>{
+    const k=b.dataset.k;
+    if(b.dataset.act==='open') deschideLuna(k);
+    else if(b.dataset.act==='prev') deschideLuna(k,'prev');
+    else if(b.dataset.act==='json'){ const d=store.luni.get(k); download(new Blob([JSON.stringify(d,null,2)],{type:'application/json'}), k+'.json'); }
+    else if(b.dataset.act==='del'){ if(confirm('Ștergi luna '+numeLunii(k)+' din arhiva acestui browser?')){ store.luni.remove(k); listeazaLuni(); marcheazaModificari(); } }
+  }));
+}
+
 /* ---------- GitHub ---------- */
 async function ghRefresh(){
   const el = $('#ghList');
@@ -508,7 +562,7 @@ async function ghSave(){
 
 /* ---------- diverse ---------- */
 let saveTimer;
-function scheduleSave(){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>store.draft.save(snapshot(true)), 600); }
+function scheduleSave(){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ store.draft.save(snapshot(true)); marcheazaModificari(); }, 600); }
 function toast(msg, bad){ const s=$('#status'); s.textContent=msg; s.classList.toggle('bad', !!bad); clearTimeout(toast._t); toast._t=setTimeout(()=>{s.textContent='';},6000); }
 function setSide(open){ document.body.classList.toggle('side-open', open); }
 function syncMetaInputs(){
@@ -521,7 +575,7 @@ function syncMetaInputs(){
 function wire(){
   $('#luna').innerHTML = LUNI.map((l,i)=>`<option value="${i+1}">${l}</option>`).join('');
   ['an','luna','unitate'].forEach(id=>$('#'+id).addEventListener('change', e=>{
-    state.meta[id] = id==='unitate' ? e.target.value : +e.target.value; render(); scheduleSave();
+    state.meta[id] = id==='unitate' ? e.target.value : +e.target.value; render(); scheduleSave(); amprentaSalvata=null; marcheazaModificari();
   }));
   $('#modeCumulat').addEventListener('change', ()=>{ state.mode='cumulat'; buildTable(); render(); });
   $('#modeDelta').addEventListener('change', ()=>{
@@ -534,6 +588,10 @@ function wire(){
   $('#filtru').addEventListener('input', ()=>render());
   $('#hideZero').addEventListener('change', ()=>render());
   $('#btnXlsx').addEventListener('click', exportXlsx);
+  $('#btnSave').addEventListener('click', salveazaLuna);
+  $('#btnLuni').addEventListener('click', ()=>{ listeazaLuni(); $('#luniDlg').showModal(); });
+  $('#luniClose').addEventListener('click', ()=>$('#luniDlg').close());
+  document.addEventListener('keydown', e=>{ if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='s'){ e.preventDefault(); salveazaLuna(); } });
   $('#btnPdf').addEventListener('click', ()=>window.print());
   $('#btnJson').addEventListener('click', exportJson);
   $('#btnNew').addEventListener('click', ()=>{ if(confirm('Golești formularul curent?')){ state=newState(); store.draft.clear(); bc39ref=null; importNote=null; $('#bcRef').textContent=''; syncMetaInputs(); buildTable(); render(); }});
@@ -590,6 +648,8 @@ async function init(){
   catch(e){ toast('Șablon indisponibil: '+e.message, true); }
   render();
   if(location.search.includes('r=')) history.replaceState(null, '', location.pathname);
+  { const sal = store.luni.get(cheiaLunii()); if(sal && JSON.stringify(sal.leaves)===JSON.stringify(state.leaves)) amprentaSalvata = amprenta(); }
+  marcheazaModificari();
   verificaVersiunea();
   setInterval(verificaVersiunea, 10*60*1000);
   document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) verificaVersiunea(); });

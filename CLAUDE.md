@@ -69,6 +69,15 @@ descrescător. Rândul 38 („Contribuții, din care:") e static în șablon, da
    commit-uiesc** — testele le primesc prin variabile de mediu.
 6. **Fără dependențe externe la runtime.** Tot ce se încarcă vine din depozit; aplicația merge offline.
 
+## Salvarea lunilor
+
+O singură acțiune, „Salvează luna" (sau Ctrl/Cmd+S): pune snapshot-ul (cu luna precedentă și referința BC39)
+în arhiva din browser (`store.luni`, cheie `AAAA-LL` în `localStorage['execbug.luni']`) și, dacă GitHub e
+configurat cu token, îl trimite și în depozit (`saveMonth`). Butonul arată un punct galben când starea diferă
+de versiunea salvată a lunii curente (`amprenta()` vs `amprentaSalvata`). Meniul ⋯ → „Luni salvate…" listează
+arhiva: Deschide (restaurează pentru modificări; salvarea suprascrie acea lună), Ca lună precedentă, JSON,
+Șterge. Ciorna (`execbug.draft`) rămâne separată: e starea de lucru, arhiva e ce ai salvat explicit.
+
 ## Versionarea fișierelor (cache)
 
 GitHub Pages și browserul țin în cache `app.js`, modulele și CSS-ul. Toate adresele lor poartă `?v=<data-ora>`
