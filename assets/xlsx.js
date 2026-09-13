@@ -1,6 +1,6 @@
 // Citire/scriere .xlsx prin editare directa a XML-ului din pachet (JSZip).
 // Scopul: exportul pastreaza intact formatarea, formulele si setarile de tiparire ale machetei CAS.
-import { r3 } from './num.js?v=20260913-154159';
+import { r3 } from './num.js?v=20260913-181308';
 
 const COLS = ['E','F','G','H','I','J'];
 const KEYS = ['e','f','g','h','i','j'];

@@ -1,7 +1,7 @@
-import { ROWS } from './rows.js?v=20260913-154159';
-import { parseNum, r3, fmt, fmtLei } from './num.js?v=20260913-154159';
-import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20260913-154159';
-import * as store from './store.js?v=20260913-154159';
+import { ROWS } from './rows.js?v=20260913-181308';
+import { parseNum, r3, fmt, fmtLei } from './num.js?v=20260913-181308';
+import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20260913-181308';
+import * as store from './store.js?v=20260913-181308';
 
 const KEYS = ['e','f','g','h','i','j'];
 const lunaDinText = t => { const i = LUNI.findIndex(l=>new RegExp(l,'i').test(String(t||''))); return i<0?null:i+1; };
@@ -374,12 +374,31 @@ function restore(data){
     toast('Luna precedentă lipsește din fișier — am trecut pe modul „cumulat", valorile rămân neschimbate.', true);
   }
   syncMetaInputs(); buildTable(); render(); scheduleSave();
+  if(prev && state.mode==='cumulat' && faraCumulat()) treciPeDelta(true);
 }
+/** Formularul nu are inca date cumulate (col. 3/6/8 goale pe toate randurile)? */
+const faraCumulat = () => LEAVES.every(r=>{ const L=state.leaves[r]; return Math.abs(L.h)<1e-9 && Math.abs(L.j)<1e-9 && Math.abs(L.e)<1e-9; });
+/** Trece pe modul delta fata de luna precedenta, pastrand ce a fost tastat in modul cumulat (col. 7, col. 4, col. 8). */
+function treciPeDelta(anunta){
+  if(!prev) return;
+  state.mode = 'delta';
+  LEAVES.forEach(r=>{
+    const p = prev.leaves[r]||blank(), L = state.leaves[r], d = state.din[r];
+    if(!d.i && L.i) d.i = L.i;                                   // platile lunii tastate in col. 7
+    if(!d.f) d.f = L.f || p.f || 0;                               // creditele de angajament
+    if(!d.dj && L.j) d.dj = r3(L.j - (p.j||0));                   // cheltuieli efective tastate cumulat
+  });
+  syncMetaInputs(); buildTable(); render(); scheduleSave();
+  if(anunta) toast(`Mod „delta" față de ${prev.label}: coloanele cumulate pornesc de la ${prev.label}; completezi doar plățile lunii (col. 7) și delta cheltuielilor efective.`);
+}
+/** Dupa incarcarea lunii precedente: daca luna curenta nu are inca date cumulate, treci automat pe delta. */
+function dupaPrev(){ if(state.mode==='cumulat' && faraCumulat()) setTimeout(()=>treciPeDelta(true), 50); }
 function setPrev(leaves, label){
   const L = {}; LEAVES.forEach(r=>{ L[r] = {...blank(), ...(leaves[r]||{})}; });
   prev = { leaves:L, label, totals: aggregate(L)[8] };
   state.prevLabel = label;
   $('#prevInfo').textContent = 'Lună precedentă: ' + label;
+  $('#prevHdr').textContent = 'față de ' + label; $('#prevHdr').hidden = false;
   $('#modeDelta').disabled = false; $('#modeSeg').hidden = false;
   if($('#tbl').rows.length) render();
 }
@@ -428,7 +447,7 @@ async function onFile(input, target){
   try{
     if(f.name.toLowerCase().endsWith('.json')){
       const data = JSON.parse(await f.text());
-      if(target==='prev') setPrev(data.leaves||{}, data.meta ? `${LUNI[(data.meta.luna||1)-1]} ${data.meta.an}` : f.name);
+      if(target==='prev'){ setPrev(data.leaves||{}, data.meta ? `${LUNI[(data.meta.luna||1)-1]} ${data.meta.an}` : f.name); dupaPrev(); }
       else { restore(data); toast('Stare încărcată din JSON.'); }
       return;
     }
@@ -456,7 +475,7 @@ async function onFile(input, target){
     const dif = verificaConsecventa(m);
     importNote = dif.length ? { title:`Macheta importată (${eticheta}) are totaluri care nu corespund sumei rândurilor`,
       det: dif.slice(0,6).join(' · ') + (dif.length>6?` · încă ${dif.length-6}`:'') + '. Aplicația recalculează totalurile de jos în sus; verifică rândurile respective în fișierul sursă.' } : null;
-    if(target==='prev'){ setPrev(m.values, eticheta); scheduleSave(); toast('Lună precedentă încărcată: '+eticheta+(dif.length?' — are totaluri inconsecvente, vezi verificările':'')); }
+    if(target==='prev'){ setPrev(m.values, eticheta); scheduleSave(); toast('Lună precedentă încărcată: '+eticheta+(dif.length?' — are totaluri inconsecvente, vezi verificările':'')); dupaPrev(); }
     else {
       LEAVES.forEach(r=>{ if(m.values[r]) Object.assign(state.leaves[r], m.values[r]); });
       if(LEAVES.some(r=>{ const v=state.leaves[r]; return Math.abs(v.e-v.h)>0.0005 || Math.abs(v.g-v.h)>0.0005; })){
@@ -532,7 +551,7 @@ async function deschideLuna(k, ca){
   if(await store.folder.get() && (await store.folder.permisiune(true))==='granted') d = await store.folder.citeste(k+'.json');
   if(!d) d = store.luni.get(k);
   if(!d) return toast('Luna nu există nici în folder, nici în arhiva din browser.', true);
-  if(ca==='prev'){ setPrev(d.leaves||{}, numeLunii(k)); scheduleSave(); toast('Lună precedentă: '+numeLunii(k)); }
+  if(ca==='prev'){ setPrev(d.leaves||{}, numeLunii(k)); scheduleSave(); toast('Lună precedentă: '+numeLunii(k)); dupaPrev(); }
   else { restore(d); amprentaSalvata = amprenta(); marcheazaModificari(); toast('Deschis pentru modificări: '+numeLunii(k)); }
   $('#luniDlg').close();
 }
@@ -595,7 +614,7 @@ async function ghLoad(name, as){
   try{
     const r = await store.loadMonth(name);
     if(!r) throw new Error('Fișierul nu există.');
-    if(as==='prev'){ setPrev(r.data.leaves||{}, name.replace('.json','')); toast('Lună precedentă încărcată din GitHub.'); }
+    if(as==='prev'){ setPrev(r.data.leaves||{}, name.replace('.json','')); toast('Lună precedentă încărcată din GitHub.'); dupaPrev(); }
     else { restore(r.data); toast('Lună deschisă din GitHub.'); }
     $('#ghDlg').close();
   }catch(e){ toast(e.message, true); }
@@ -629,9 +648,7 @@ function wire(){
   $('#modeCumulat').addEventListener('change', ()=>{ state.mode='cumulat'; buildTable(); render(); });
   $('#modeDelta').addEventListener('change', ()=>{
     if(!prev) return toast('Încarcă întâi luna precedentă.', true);
-    state.mode='delta';
-    LEAVES.forEach(r=>{ const p=prev.leaves[r]||blank(); if(!state.din[r].f) state.din[r].f = p.f||0; });
-    buildTable(); render();
+    treciPeDelta(true);
   });
   $('#linkEG').addEventListener('change', e=>{ state.linkEG=e.target.checked; buildTable(); render(); });
   $('#filtru').addEventListener('input', ()=>render());
@@ -644,7 +661,7 @@ function wire(){
   document.addEventListener('keydown', e=>{ if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='s'){ e.preventDefault(); salveazaLuna(); } });
   $('#btnPdf').addEventListener('click', ()=>window.print());
   $('#btnJson').addEventListener('click', exportJson);
-  $('#btnNew').addEventListener('click', ()=>{ if(confirm('Golești formularul curent?')){ state=newState(); store.draft.clear(); bc39ref=null; importNote=null; $('#bcRef').textContent=''; syncMetaInputs(); buildTable(); render(); }});
+  $('#btnNew').addEventListener('click', ()=>{ if(confirm('Golești formularul curent?')){ state=newState(); store.draft.clear(); bc39ref=null; importNote=null; prev=null; $('#bcRef').textContent=''; $('#prevHdr').hidden=true; $('#modeSeg').hidden=true; $('#modeDelta').disabled=true; $('#prevInfo').textContent='Nicio lună precedentă încărcată'; syncMetaInputs(); buildTable(); render(); }});
   $('#fPrev').addEventListener('change', e=>onFile(e.target,'prev'));
   $('#fCur').addEventListener('change', e=>onFile(e.target,'cur'));
   $('#fBc').addEventListener('change', e=>onFile(e.target,'bc39'));

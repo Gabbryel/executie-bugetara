@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Execuție bugetară — machetă CAS</title>
-<link rel="stylesheet" href="assets/styles.css?v=20260913-154159">
+<link rel="stylesheet" href="assets/styles.css?v=20260913-181308">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>📊</text></svg>">
 </head>
 <body>
@@ -16,6 +16,7 @@
       <span class="sep">·</span>
       <select id="luna" class="plain" title="Luna (cumulat până la)"></select>
       <input type="number" id="an" class="plain an" min="2020" max="2100" title="An">
+      <span class="muted prev-hdr" id="prevHdr" hidden title="Luna precedentă încărcată"></span>
       <div class="seg" id="modeSeg" hidden title="Mod de completare">
         <label><input type="radio" name="mode" id="modeCumulat" checked><span>cumulat</span></label>
         <label><input type="radio" name="mode" id="modeDelta" disabled><span>delta</span></label>
@@ -120,7 +121,7 @@
   </div>
 </dialog>
 
-<script src="assets/jszip.min.js?v=20260913-154159"></script>
-<script type="module" src="assets/app.js?v=20260913-154159"></script>
+<script src="assets/jszip.min.js?v=20260913-181308"></script>
+<script type="module" src="assets/app.js?v=20260913-181308"></script>
 </body>
 </html>
