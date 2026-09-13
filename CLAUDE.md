@@ -78,6 +78,14 @@ de versiunea salvată a lunii curente (`amprenta()` vs `amprentaSalvata`). Meniu
 arhiva: Deschide (restaurează pentru modificări; salvarea suprascrie acea lună), Ca lună precedentă, JSON,
 Șterge. Ciorna (`execbug.draft`) rămâne separată: e starea de lucru, arhiva e ce ai salvat explicit.
 
+**Folder de salvare pe disc** (`store.folder`, File System Access API, doar Chrome/Edge): meniul ⋯ →
+„Folder de salvare…" deschide selectorul nativ o singură dată; handle-ul se ține în IndexedDB
+(`execbug/kv/folder`). „Salvează luna" scrie apoi `AAAA-LL.json` și în folder, fără niciun token; permisiunea
+de scriere se cere la primul clic după repornirea browserului (necesită gest al utilizatorului, de aceea nu se
+cere la încărcare). La listare și deschidere, fișierul de pe disc are prioritate față de arhiva din browser,
+pentru că poate fi modificat și din altă parte (folder sincronizat cu OneDrive/Drive). În browsere fără suport,
+opțiunea e ascunsă și totul rămâne în arhiva din browser. GitHub cu token rămâne opțional, în plus.
+
 ## Versionarea fișierelor (cache)
 
 GitHub Pages și browserul țin în cache `app.js`, modulele și CSS-ul. Toate adresele lor poartă `?v=<data-ora>`

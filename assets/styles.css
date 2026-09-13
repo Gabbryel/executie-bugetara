@@ -62,6 +62,8 @@ select.plain{padding-right:4px}
 .luna-i .d{font-size:11.5px;color:var(--muted)}
 .luna-i .acts{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
 .luna-i .acts .btn{padding:3px 8px;height:24px;font-size:12px}
+.luna-i .src{display:inline-block;font-size:10px;padding:0 5px;border-radius:4px;border:1px solid var(--line);color:var(--muted);margin-left:6px;vertical-align:middle}
+.luna-i .src.disc{border-color:var(--ok);color:var(--ok)}
 .luna-i.cur{background:var(--accent-soft);padding:7px 6px;border-radius:6px}
 .gh-list{overflow-x:hidden}
 

@@ -1,7 +1,7 @@
-import { ROWS } from './rows.js?v=20260913-141302';
-import { parseNum, r3, fmt, fmtLei } from './num.js?v=20260913-141302';
-import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20260913-141302';
-import * as store from './store.js?v=20260913-141302';
+import { ROWS } from './rows.js?v=20260913-154159';
+import { parseNum, r3, fmt, fmtLei } from './num.js?v=20260913-154159';
+import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20260913-154159';
+import * as store from './store.js?v=20260913-154159';
 
 const KEYS = ['e','f','g','h','i','j'];
 const lunaDinText = t => { const i = LUNI.findIndex(l=>new RegExp(l,'i').test(String(t||''))); return i<0?null:i+1; };
@@ -487,28 +487,77 @@ async function salveazaLuna(){
   try{ store.luni.set(k, data); }
   catch(e){ return toast('Nu am putut salva în browser: '+e.message, true); }
   amprentaSalvata = amprenta(); marcheazaModificari();
+  const unde = ['în acest browser'];
+  const erori = [];
+  // 1. folderul de pe disc (fara token; permisiunea se cere la primul clic)
+  if(store.folder.suportat() && await store.folder.get()){
+    const p = await store.folder.permisiune(true);
+    if(p==='granted'){
+      try{ await store.folder.scrie(k+'.json', JSON.stringify(data, null, 2)); unde.push('în folderul „'+((await store.folder.get()).name||'ales')+'"'); }
+      catch(e){ erori.push('folder: '+e.message); }
+    } else erori.push('folderul de salvare nu are permisiune (alege-l din nou din meniu)');
+  }
+  // 2. GitHub, doar daca e configurat cu token
   const c = store.cfg.get();
   if(c.owner && c.repo && store.cfg.token()){
-    toast(`Salvat în browser (${numeLunii(k)}). Trimit și în GitHub…`);
-    try{ await store.saveMonth(k+'.json', snapshot(), `Execuție bugetară ${numeLunii(k)}`); toast(`Salvat: ${numeLunii(k)} — în browser și în GitHub (${c.owner}/${c.repo}).`); }
-    catch(e){ toast(`Salvat în browser, dar nu și în GitHub: ${e.message}`, true); }
-  } else {
-    toast(`Salvat în acest browser: ${numeLunii(k)}. Pentru o copie în GitHub, configurează depozitul din meniu.`);
+    try{ await store.saveMonth(k+'.json', snapshot(), `Execuție bugetară ${numeLunii(k)}`); unde.push(`în GitHub (${c.owner}/${c.repo})`); }
+    catch(e){ erori.push('GitHub: '+e.message); }
   }
+  let msg = `Salvat ${numeLunii(k)} ${unde.join(', ')}.`;
+  if(unde.length===1 && store.folder.suportat() && !(await store.folder.get())) msg += ' Alege un folder de salvare din meniul ⋯ ca să ai fișierul și pe disc.';
+  if(erori.length) msg += ' Nu s-a putut salva ' + erori.join('; ') + '.';
+  toast(msg, erori.length>0);
 }
-function deschideLuna(k, ca){
-  const d = store.luni.get(k); if(!d) return toast('Luna nu există în arhivă.', true);
+async function alegeFolder(){
+  if(!store.folder.suportat()) return toast('Browserul acesta nu permite scrierea în foldere. Folosește Chrome sau Edge; între timp lunile se salvează în browser.', true);
+  try{
+    const h = await store.folder.alege();
+    await actualizeazaFolderInfo();
+    toast(`Folder de salvare: „${h.name}". De acum „Salvează luna" scrie și fișierul AAAA-LL.json acolo.`);
+  }catch(e){ if(e.name!=='AbortError') toast('Nu am putut alege folderul: '+e.message, true); }
+}
+async function actualizeazaFolderInfo(){
+  const el = $('#folderInfo');
+  if(!store.folder.suportat()){ el.textContent = 'Salvarea pe disc nu e disponibilă în acest browser.'; $('#btnFolder').hidden = true; return; }
+  const h = await store.folder.get();
+  if(!h){ el.textContent = 'Niciun folder ales — lunile se salvează doar în browser.'; return; }
+  const p = await store.folder.permisiune(false);
+  el.innerHTML = `Folder: <b>${h.name||'(ales)'}</b>` + (p==='granted' ? '' : ' · <span class="muted">permisiunea se cere la prima salvare</span>') +
+    ` · <a href="#" id="folderUita">uită folderul</a>`;
+  $('#folderUita').addEventListener('click', async e=>{ e.preventDefault(); await store.folder.uita(); actualizeazaFolderInfo(); toast('Folderul a fost uitat; lunile se salvează doar în browser.'); });
+}
+async function deschideLuna(k, ca){
+  // fisierul de pe disc are prioritate (poate fi modificat si din alta parte), apoi arhiva din browser
+  let d = null;
+  if(await store.folder.get() && (await store.folder.permisiune(true))==='granted') d = await store.folder.citeste(k+'.json');
+  if(!d) d = store.luni.get(k);
+  if(!d) return toast('Luna nu există nici în folder, nici în arhiva din browser.', true);
   if(ca==='prev'){ setPrev(d.leaves||{}, numeLunii(k)); scheduleSave(); toast('Lună precedentă: '+numeLunii(k)); }
   else { restore(d); amprentaSalvata = amprenta(); marcheazaModificari(); toast('Deschis pentru modificări: '+numeLunii(k)); }
   $('#luniDlg').close();
 }
-function listeazaLuni(){
-  const el = $('#luniList'); const keys = store.luni.keys(); const cur = cheiaLunii();
+async function listeazaLuni(){
+  const el = $('#luniList'); const cur = cheiaLunii();
+  el.innerHTML = '<div class="muted">Se încarcă…</div>';
+  const surse = {};                                   // key -> { browser, disc }
+  store.luni.keys().forEach(k=>{ surse[k] = { browser: store.luni.get(k), disc:null }; });
+  const h = await store.folder.get();
+  let sursa = 'Sursa: arhiva din acest browser.';
+  if(h){
+    const p = await store.folder.permisiune(true);
+    if(p==='granted'){
+      for(const f of await store.folder.lista()){ (surse[f.key] ||= {browser:null, disc:null}).disc = await store.folder.citeste(f.name) || {}; }
+      sursa = `Sursa: folderul „${h.name||'ales'}" (are prioritate) și arhiva din acest browser.`;
+    } else sursa = `Folderul „${h.name}" nu are permisiune — se afișează doar arhiva din browser.`;
+  }
+  $('#luniSursa').textContent = sursa;
+  const keys = Object.keys(surse).sort().reverse();
   if(!keys.length){ el.innerHTML = '<div class="muted">Nicio lună salvată încă. Completează formularul și apasă „Salvează luna".</div>'; return; }
-  el.innerHTML = keys.map(k=>{ const d=store.luni.get(k); const t=d.total_r8||{};
+  el.innerHTML = keys.map(k=>{ const S=surse[k]; const d=S.disc||S.browser; const t=d.total_r8||{};
+    const src = (S.disc?'<span class="src disc">disc</span>':'') + (S.browser?'<span class="src">browser</span>':'');
     return `<div class="luna-i ${k===cur?'cur':''}">
-      <div><div class="n">${numeLunii(k)}${k===cur?' <span class="muted">(în lucru)</span>':''}</div>
-        <div class="d">plăți cumulate ${fmt(t.h||0)} · luna ${fmt(t.i||0)} · salvat ${new Date(d.salvat||d.generat).toLocaleString('ro-RO')}</div></div>
+      <div><div class="n">${numeLunii(k)}${k===cur?' <span class="muted">(în lucru)</span>':''}${src}</div>
+        <div class="d">plăți cumulate ${fmt(t.h||0)} · luna ${fmt(t.i||0)} · salvat ${d.salvat||d.generat ? new Date(d.salvat||d.generat).toLocaleString('ro-RO') : '—'}</div></div>
       <div class="acts">
         <button class="btn" data-act="open" data-k="${k}">Deschide</button>
         <button class="btn" data-act="prev" data-k="${k}">Ca lună precedentă</button>
@@ -519,8 +568,8 @@ function listeazaLuni(){
     const k=b.dataset.k;
     if(b.dataset.act==='open') deschideLuna(k);
     else if(b.dataset.act==='prev') deschideLuna(k,'prev');
-    else if(b.dataset.act==='json'){ const d=store.luni.get(k); download(new Blob([JSON.stringify(d,null,2)],{type:'application/json'}), k+'.json'); }
-    else if(b.dataset.act==='del'){ if(confirm('Ștergi luna '+numeLunii(k)+' din arhiva acestui browser?')){ store.luni.remove(k); listeazaLuni(); marcheazaModificari(); } }
+    else if(b.dataset.act==='json'){ const d=(surse[k].disc||surse[k].browser); download(new Blob([JSON.stringify(d,null,2)],{type:'application/json'}), k+'.json'); }
+    else if(b.dataset.act==='del'){ if(confirm('Ștergi luna '+numeLunii(k)+(surse[k].disc?' din folder și':'')+' din arhiva acestui browser?')){ store.luni.remove(k); if(surse[k].disc) store.folder.sterge(k+'.json').catch(e=>toast('Nu am putut șterge fișierul: '+e.message,true)).then(listeazaLuni); else listeazaLuni(); marcheazaModificari(); } }
   }));
 }
 
@@ -589,7 +638,8 @@ function wire(){
   $('#hideZero').addEventListener('change', ()=>render());
   $('#btnXlsx').addEventListener('click', exportXlsx);
   $('#btnSave').addEventListener('click', salveazaLuna);
-  $('#btnLuni').addEventListener('click', ()=>{ listeazaLuni(); $('#luniDlg').showModal(); });
+  $('#btnLuni').addEventListener('click', ()=>{ $('#luniDlg').showModal(); listeazaLuni(); });
+  $('#btnFolder').addEventListener('click', alegeFolder);
   $('#luniClose').addEventListener('click', ()=>$('#luniDlg').close());
   document.addEventListener('keydown', e=>{ if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='s'){ e.preventDefault(); salveazaLuna(); } });
   $('#btnPdf').addEventListener('click', ()=>window.print());
@@ -650,6 +700,7 @@ async function init(){
   if(location.search.includes('r=')) history.replaceState(null, '', location.pathname);
   { const sal = store.luni.get(cheiaLunii()); if(sal && JSON.stringify(sal.leaves)===JSON.stringify(state.leaves)) amprentaSalvata = amprenta(); }
   marcheazaModificari();
+  actualizeazaFolderInfo();
   verificaVersiunea();
   setInterval(verificaVersiunea, 10*60*1000);
   document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) verificaVersiunea(); });

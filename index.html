@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Execuție bugetară — machetă CAS</title>
-<link rel="stylesheet" href="assets/styles.css?v=20260913-141302">
+<link rel="stylesheet" href="assets/styles.css?v=20260913-154159">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>📊</text></svg>">
 </head>
 <body>
@@ -36,6 +36,8 @@
           <div class="menu-i muted" id="prevInfo">Nicio lună precedentă încărcată</div>
           <div class="menu-t">Luni</div>
           <button id="btnLuni">Luni salvate…</button>
+          <button id="btnFolder">Folder de salvare…</button>
+          <div class="menu-i muted" id="folderInfo"></div>
           <div class="menu-t">Exportă</div>
           <button id="btnJson">Export JSON</button>
           <button id="btnPdf">Tipărire / PDF</button>
@@ -91,6 +93,7 @@
   <div class="dlg-h"><h3>Luni salvate</h3><button class="btn" id="luniClose">Închide</button></div>
   <div class="dlg-b">
     <p class="muted" style="margin-top:0">Deschide o lună ca să o modifici, apoi apasă „Salvează luna". Salvarea suprascrie versiunea acelei luni; lunile diferite nu se ating între ele.</p>
+    <p class="muted small" id="luniSursa" style="margin:0 0 8px"></p>
     <div id="luniList" class="gh-list" style="max-height:340px"></div>
     <p class="status-inline" id="luniStatus"></p>
   </div>
@@ -117,7 +120,7 @@
   </div>
 </dialog>
 
-<script src="assets/jszip.min.js?v=20260913-141302"></script>
-<script type="module" src="assets/app.js?v=20260913-141302"></script>
+<script src="assets/jszip.min.js?v=20260913-154159"></script>
+<script type="module" src="assets/app.js?v=20260913-154159"></script>
 </body>
 </html>

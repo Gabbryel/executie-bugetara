@@ -25,6 +25,50 @@ export const luni = {
   remove(k){ const a=this.all(); delete a[k]; try{ localStorage.setItem(LS_LUNI, JSON.stringify(a)); }catch{} }
 };
 
+// Folder de salvare pe disc (File System Access API, Chrome/Edge). Handle-ul se pastreaza in IndexedDB.
+function idb(){ return new Promise((res,rej)=>{ const r=indexedDB.open('execbug',1); r.onupgradeneeded=()=>r.result.createObjectStore('kv'); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+async function kv(op, k, v){ const db=await idb(); return new Promise((res,rej)=>{ const st=db.transaction('kv', op==='get'?'readonly':'readwrite').objectStore('kv'); const t = op==='get'?st.get(k): op==='set'?st.put(v,k): st.delete(k); t.onsuccess=()=>res(t.result); t.onerror=()=>rej(t.error); }); }
+const NUME_LUNA = /^(\d{4})-(\d{2})\.json$/;
+let folderHandle = null;
+export const folder = {
+  suportat(){ return typeof window!=='undefined' && 'showDirectoryPicker' in window; },
+  async get(){ if(folderHandle) return folderHandle; try{ folderHandle = (await kv('get','folder')) || null; }catch{ folderHandle=null; } return folderHandle; },
+  async alege(){
+    const h = await window.showDirectoryPicker({ mode:'readwrite', id:'execbug', startIn:'documents' });
+    folderHandle = h; try{ await kv('set','folder',h); }catch{}
+    return h;
+  },
+  async uita(){ folderHandle=null; try{ await kv('del','folder'); }catch{} },
+  /** 'granted' | 'prompt' | 'denied' | null (fara folder). Cu cere=true incearca sa obtina permisiunea (necesita un clic al utilizatorului). */
+  async permisiune(cere){
+    const h = await this.get(); if(!h) return null;
+    if(!h.queryPermission) return 'granted';
+    let p = await h.queryPermission({mode:'readwrite'});
+    if(p==='prompt' && cere){ try{ p = await h.requestPermission({mode:'readwrite'}); }catch{ p='denied'; } }
+    return p;
+  },
+  async scrie(name, text){
+    const h = await this.get(); if(!h) throw new Error('Niciun folder ales.');
+    const f = await h.getFileHandle(name, {create:true});
+    const w = await f.createWritable(); await w.write(text); await w.close();
+  },
+  async citeste(name){
+    const h = await this.get(); if(!h) return null;
+    try{ const f = await h.getFileHandle(name); return JSON.parse(await (await f.getFile()).text()); }catch{ return null; }
+  },
+  async sterge(name){ const h = await this.get(); if(h) await h.removeEntry(name); },
+  /** Lista lunilor din folder: [{key:'AAAA-LL', name, modificat}] */
+  async lista(){
+    const h = await this.get(); if(!h) return [];
+    const out = [];
+    for await (const e of h.values()){
+      const m = e.kind==='file' && e.name.match(NUME_LUNA); if(!m) continue;
+      const f = await e.getFile(); out.push({ key:`${m[1]}-${m[2]}`, name:e.name, modificat:f.lastModified });
+    }
+    return out.sort((a,b)=>b.key.localeCompare(a.key));
+  }
+};
+
 export const draft = {
   save(state){ try{ localStorage.setItem(LS_DRAFT, JSON.stringify(state)); }catch{} },
   load(){ try{ return JSON.parse(localStorage.getItem(LS_DRAFT)||'null'); }catch{ return null; } },

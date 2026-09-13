@@ -20,6 +20,7 @@ Rulează integral în browser. Se publică pe GitHub Pages.
 - **Export `.xlsx` identic cu macheta CAS.** Aplicația nu generează un fișier nou: deschide șablonul original, scrie doar valorile și lasă neatinse formatarea, formulele, înălțimile de rând și setările de tipărire. Verificat prin recalculare: totalurile exportate coincid la a treia zecimală cu fișierele originale.
 - **Tipărire / PDF** direct din browser (A4 landscape), cu antetul și rubricile de semnătură.
 - **Salvarea lunii** dintr-un singur buton („Salvează luna" sau Ctrl/Cmd+S): luna intră în arhiva din browser și, dacă ai configurat depozitul, și în GitHub. Din „Luni salvate…" redeschizi oricare lună, o modifici și o salvezi din nou; poți folosi o lună salvată ca lună precedentă sau o poți exporta ca JSON.
+- **Folder de salvare pe disc, fără token**: în Chrome sau Edge alegi o dată un folder (meniul ⋯ → „Folder de salvare…"), iar „Salvează luna" scrie acolo `AAAA-LL.json`. Dacă folderul e sincronizat cu OneDrive, Google Drive sau Dropbox, ai backup și acces de pe alt calculator fără nicio configurare.
 - **Persistență**: ciornă automată în browser, export/import JSON și, opțional, un depozit GitHub ca bază de date.
 
 ## Baza de date în GitHub
