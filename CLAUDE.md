@@ -23,7 +23,11 @@ Corelații verificate pe două luni reale (aprilie și iulie 2026):
 - `BC39 Bugetar (lei) = rând 8 col. 3 × 1000`; `BC39 Angajament (lei) = rând 8 col. 4 × 1000`. Exact, fără rotunjiri.
 - Rândul 8 col. 3 = col. 5 = col. 6 (creditele se consumă integral).
 - Col. 8 − col. 6 = facturi înregistrate și neplătite; decalajul e stabil (~43–44 mii lei).
-- Col. 4 poate fi **și sub, și peste** col. 3 — nu presupune un semn fix.
+- Col. 4 poate fi **și sub, și peste** col. 3 — nu presupune un semn fix. Pe rânduri, contabilul o **reface
+  lunar din col. 3**, cu 4–5 rânduri rotunjite în sus la mii (verificat iunie/iulie 2026: r.14 527,387 → 528,000);
+  rotunjirile nu se moștenesc de la o lună la alta. De aceea în modul delta col. 4 urmează col. 3 pe fiecare
+  rând (`din.f == null`, celulă cu chenar punctat) până tastezi o valoare; golirea celulei o readuce la automat.
+  Ciornele cu `versiune < 2` copiau col. 4 din luna precedentă; `restore` le migrează.
 - Rândul 83 (programe naționale de sănătate) e 0: unitatea nu derulează PNS.
 - Formatul BC39 variază între luni (o coloană `Spital` sau două: `Total` + `Spital (inclusiv PNS)`).
   Fișa are și `An`, `Luna (cumulat)`, `Denumire` (ex. „SPINAL CARE SRL"), `Cod`; rândul `Angajament` vine

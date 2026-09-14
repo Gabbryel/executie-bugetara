@@ -8,7 +8,7 @@ Rulează integral în browser. Se publică pe GitHub Pages.
 ## Ce face
 
 - **Completare asistată** a celor 121 de rânduri (8–128) ale foii `BC`. Rândurile de sinteză se calculează automat după arborele de agregare din machetă; se completează doar frunzele.
-- **Mod „delta"** — după ce încarci luna precedentă, completezi doar plățile lunii (col. 7) și delta cheltuielilor efective; coloanele cumulate (3, 5, 6, 8) se calculează singure.
+- **Mod „delta"** — după ce încarci luna precedentă, completezi doar plățile lunii (col. 7) și delta cheltuielilor efective; coloanele cumulate (3, 5, 6, 8) se calculează singure. Col. 4 (credite de angajament) urmează col. 3 pe fiecare rând până tastezi o valoare în ea (celulă cu chenar punctat); golirea celulei o readuce la col. 3. Așa face și contabilul: col. 4 se reface lunar din col. 3, cu câteva rânduri rotunjite în sus la mii.
 - **Lista de control** rulează la fiecare tastă:
   1. corelația cu fișa BC39 (r.8 col.3 × 1000 = Bugetar, col.4 × 1000 = Angajament);
   2. r.8: col.3 = col.5 = col.6;
