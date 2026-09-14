@@ -1,7 +1,7 @@
-import { ROWS } from './rows.js?v=20260914-103146';
-import { parseNum, r3, fmt, fmtLei } from './num.js?v=20260914-103146';
-import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20260914-103146';
-import * as store from './store.js?v=20260914-103146';
+import { ROWS } from './rows.js?v=20260914-104428';
+import { parseNum, r3, fmt, fmtLei } from './num.js?v=20260914-104428';
+import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20260914-104428';
+import * as store from './store.js?v=20260914-104428';
 
 const KEYS = ['e','f','g','h','i','j'];
 const lunaDinText = t => { const i = LUNI.findIndex(l=>new RegExp(l,'i').test(String(t||''))); return i<0?null:i+1; };
@@ -235,6 +235,7 @@ function runChecks(vals){
   const out = [];
   const t = vals[8];
   const near = (a,b,eps=0.0005)=>Math.abs(a-b)<=eps;
+  const nr = (n) => n===1 ? '1 rând' : n+' rânduri';
 
   // 1. corelatie BC39
   if(bc39ref && (bc39ref.bugetar!=null || bc39ref.angajament!=null)){
@@ -271,9 +272,10 @@ function runChecks(vals){
   }
 
   // 2. col.3 = col.5 = col.6 pe randul 8
-  out.push(chk(near(t.e,t.g)&&near(t.e,t.h), 'Rândul 8: col.3 = col.5 = col.6',
-    near(t.e,t.g)&&near(t.e,t.h) ? 'Creditele aprobate, cele trimestriale și plățile cumulate coincid.'
-      : `col.3 ${fmt(t.e)} · col.5 ${fmt(t.g)} · col.6 ${fmt(t.h)} — diferențele înseamnă credite neconsumate; verifică dacă e intenționat.`, true));
+  const c2 = near(t.e,t.g)&&near(t.e,t.h);
+  out.push(chk(c2, 'Rândul 8: col.3 = col.5 = col.6',
+    c2 ? (state.linkEG ? 'Coloanele sunt legate prin opțiune.' : 'Creditele aprobate, cele trimestriale și plățile cumulate coincid.')
+      : `col.3 ${fmt(t.e)} · col.5 ${fmt(t.g)} · col.6 ${fmt(t.h)} — diferențele înseamnă credite neconsumate; verifică dacă e intenționat.`, true, 'col. 3 = 5 = 6'));
 
   // 3. cumulat monoton fata de luna precedenta
   if(prev){
@@ -284,42 +286,53 @@ function runChecks(vals){
     });
     out.push(chk(bad.length===0,'Cumulat monoton față de '+prev.label,
       bad.length===0 ? 'Toate coloanele cumulate sunt ≥ luna precedentă.'
-        : `${bad.length} rânduri scad față de luna precedentă: ${bad.slice(0,12).join(', ')}${bad.length>12?'…':''}`));
-  } else {
-    out.push(chk(null,'Cumulat monoton față de luna precedentă','Nicio lună precedentă încărcată — verificarea nu poate rula.'));
+        : `${nr(bad.length)} ${bad.length===1?'scade':'scad'} față de ${prev.label}: ${bad.slice(0,12).join(', ')}${bad.length>12?'…':''}. Un cumulat nu poate scădea — verifică plățile lunii pe aceste rânduri.`,
+      false, 'cumulat ≥ '+prev.label));
   }
 
   // 4. col.6 <= col.4
   const over = LEAVES.filter(r=>(vals[r].h - vals[r].f) > 0.0005);
+  // in aprilie 2026 macheta reala avea r.52 cu plati peste angajament, deci e avertisment, nu eroare
   out.push(chk(over.length===0,'Plăți cumulate ≤ credite de angajament (col.6 ≤ col.4)',
     over.length===0 ? 'Nicio poziție cu plăți peste angajament.'
-      : `${over.length} rânduri depășesc angajamentul: ${over.slice(0,12).map(r=>r+' ('+fmt(vals[r].h-vals[r].f)+')').join(', ')}${over.length>12?'…':''}`));
+      : `${nr(over.length)} ${over.length===1?'are':'au'} plăți (col. 6) peste creditele de angajament (col. 4): ${over.slice(0,12).map(r=>r+' (+'+fmt(vals[r].h-vals[r].f)+')').join(', ')}${over.length>12?'…':''}. Rotunjește col. 4 în sus pe aceste rânduri sau verifică plățile.`,
+    true, 'plăți ≤ angajament'));
 
   // 5. col.8 >= col.6
   const neg = LEAVES.filter(r=>(vals[r].j - vals[r].h) < -0.0005);
   const gap = r3(t.j - t.h);
-  out.push(chk(neg.length===0,'Cheltuieli efective ≥ plăți (col.8 ≥ col.6)',
-    (neg.length===0 ? `Decalaj accrual–cash pe total: ${gap>=0?'+':''}${fmt(gap)} mii lei (facturi înregistrate și neplătite).`
-      : `${neg.length} rânduri cu efective sub plăți: ${neg.slice(0,12).join(', ')}${neg.length>12?'…':''}`) +
-     (prev ? ` În ${prev.label} decalajul era ${fmt(r3(prev.totals.j - prev.totals.h))}.` : ''), neg.length>0));
+  const reper = prev ? ` În ${prev.label} col. 8 depășea col. 6 cu ${fmt(r3(prev.totals.j - prev.totals.h))}.` : '';
+  // col. 8 netastata inca: in delta toate Δ sunt 0 (col. 8 a ramas la luna precedenta), in cumulat e goala
+  const col8Gol = state.mode==='delta' ? LEAVES.every(r=>Math.abs((state.din[r]||{}).dj||0)<1e-9) : Math.abs(t.j)<1e-9;
+  if(col8Gol && Math.abs(t.h)>1e-9){
+    out.push(chk(false,'Cheltuieli efective (col. 8) necompletate',
+      (state.mode==='delta' ? `Col. 8 a rămas la valorile din ${prev.label} (${fmt(t.j)}). Tastează în coloana Δ cheltuielile efective ale lunii ${LUNI[state.meta.luna-1]}, pe rânduri.`
+        : 'Col. 8 este goală. Completează cheltuielile efective cumulate pe rânduri.') + reper, true));
+  } else {
+    // in aprilie 2026 macheta reala avea 2 randuri cu col. 8 sub col. 6, deci e avertisment
+    out.push(chk(neg.length===0,'Cheltuieli efective ≥ plăți (col.8 ≥ col.6)',
+      (neg.length===0 ? `Col. 8 depășește plățile cu ${gap>=0?'+':''}${fmt(gap)} (facturi înregistrate și neplătite).`
+        : `${nr(neg.length)} ${neg.length===1?'are':'au'} cheltuieli efective (col. 8) sub plăți (col. 6): ${neg.slice(0,12).join(', ')}${neg.length>12?'…':''}. De regulă col. 8 ≥ col. 6 — verifică dacă e corect.`) + reper, true));
+  }
 
   // 6. integritatea sablonului
   if(TPL) out.push(chk(TPL.check.ok,'Integritatea șablonului (formula I117)',
-    TPL.check.ok ? 'I117 are formulă proprie (=+I119+I118), nu copiază cumulatul.' : 'Șablon defect: '+TPL.check.reason));
+    TPL.check.ok ? 'I117 are formulă proprie (=+I119+I118), nu copiază cumulatul.' : 'Șablon defect: '+TPL.check.reason, false, 'șablon'));
   else out.push(chk(null,'Integritatea șablonului','Șablonul nu a fost încă încărcat.'));
 
-  // 7. formatul BC39
-  out.push(chk(null,'Formatul fișei BC39',
-    bc39ref ? (()=>{
-        const d = bc39ref.detalii||{};
-        const difera = ['bugetar','angajament'].filter(k=>{ const v=Object.values(d[k]||{}); return v.length>1 && v.some(x=>Math.round(x)!==Math.round(v[0])); });
-        return `Coloane de valori: ${(bc39ref.coloane||[]).join(' · ')}; referința este „${bc39ref.coloanaRef}" (rândul 8 include PNS).` +
-          (difera.length ? ` Coloanele diferă între ele la ${difera.join(' și ')}: ` + difera.map(k=>Object.entries(d[k]).map(([c,v])=>`${c} ${fmtLei(v)}`).join(' / ')).join('; ') + ' — diferența înseamnă PNS sau alte unități.' : ' Valorile coincid între coloane.');
-      })()
-            : 'Numărul coloanelor de valori din BC39 variază între luni (ex. „Spital" vs „Total" + „Spital (inclusiv PNS)"). Verifică antetul la fiecare depunere.'));
+  // 7. formatul BC39: interesant doar cand coloanele fisei difera intre ele (PNS / alte unitati)
+  if(bc39ref){
+    const d = bc39ref.detalii||{};
+    const difera = ['bugetar','angajament'].filter(k=>{ const v=Object.values(d[k]||{}); return v.length>1 && v.some(x=>Math.round(x)!==Math.round(v[0])); });
+    const col = `Coloane de valori: ${(bc39ref.coloane||[]).join(' · ')}; referința este „${bc39ref.coloanaRef}" (rândul 8 include PNS).`;
+    if(difera.length) out.push(chk(null,'Formatul fișei BC39', col + ` Coloanele diferă între ele la ${difera.join(' și ')}: ` + difera.map(k=>Object.entries(d[k]).map(([c,v])=>`${c} ${fmtLei(v)}`).join(' / ')).join('; ') + ' — diferența înseamnă PNS sau alte unități.'));
+    else out.push(chk(true,'Formatul fișei BC39', col + ' Valorile coincid între coloane.', false, 'format BC39'));
+  }
 
   if(importNote) out.push({ cls:'warn', ic:'!', title:importNote.title, det:importNote.det });
-  $('#checks').innerHTML = out.map(chkHtml).join('');
+  const trecute = out.filter(c=>c.cls==='ok' && c.scurt).map(c=>c.scurt);
+  $('#checks').innerHTML = out.filter(c=>!(c.cls==='ok' && c.scurt)).map(chkHtml).join('') +
+    (trecute.length ? chkHtml({ cls:'ok', ic:'✓', title:'Trec fără observații', det:trecute.join(' · ') }) : '');
   const errs = out.filter(c=>c.cls==='err').length;
   const g = guidance(vals, out);
   const gd = $('#guide');
@@ -331,10 +344,11 @@ function runChecks(vals){
   $('#btnSide').classList.toggle('has-err', errs>0);
   badge.title = errs ? errs + (errs===1?' problemă':' probleme') : 'Fără erori';
 }
-function chk(ok, title, det, warnIfFail){
+/** scurt: eticheta cu care verificarea trecuta se strange in linia „Trec fara observatii" (fara ea ramane vizibila). */
+function chk(ok, title, det, warnIfFail, scurt){
   const cls = ok===null ? 'warn' : ok ? 'ok' : (warnIfFail?'warn':'err');
   const ic  = ok===null ? '?' : ok ? '✓' : '!';
-  return { cls, ic, title, det };
+  return { cls, ic, title, det, scurt };
 }
 const chkHtml = c => `<div class="chk ${c.cls}"><span class="ic">${c.ic}</span><span><b>${c.title}</b><span class="det">${c.det}</span></span></div>`;
 

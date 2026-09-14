@@ -122,7 +122,11 @@ verificările trec. Pentru validarea exportului față de original, recalculeaz�
 4. col.6 ≤ col.4 pe fiecare rând · 5. col.8 ≥ col.6, cu decalajul accrual–cash ·
 6. integritatea șablonului (`I117` = `=+I119+I118`, nu `=H117`) · 7. formatul BC39.
 
-Când adaugi o verificare: `chk(ok, titlu, detaliu, warnIfFail)`; `ok === null` = informativ.
+Când adaugi o verificare: `chk(ok, titlu, detaliu, warnIfFail, scurt)`; `ok === null` = informativ. Cu `scurt`,
+verificarea trecută nu apare ca element propriu, ci în linia „Trec fără observații" (2, 3, 4, 6, 7 sunt tautologice
+în situația obișnuită: coloane legate, delta, șablon corect). Verificarea 5 are o formă separată când col. 8 nu e
+tastată deloc (în delta: toate Δ = 0) — spune că col. 8 a rămas la luna precedentă. Verificările 4 și 5 sunt
+avertismente, nu erori: machetele reale le-au încălcat pe rânduri (aprilie 2026, r.52 și r.53/r.79).
 
 ## Layout și ghidare
 
