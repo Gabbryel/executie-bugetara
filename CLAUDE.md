@@ -92,6 +92,9 @@ de scriere se cere la primul clic după repornirea browserului (necesită gest a
 cere la încărcare). La listare și deschidere, fișierul de pe disc are prioritate față de arhiva din browser,
 pentru că poate fi modificat și din altă parte (folder sincronizat cu OneDrive/Drive). În browsere fără suport,
 opțiunea e ascunsă și totul rămâne în arhiva din browser. GitHub cu token rămâne opțional, în plus.
+„Export .xlsx" scrie macheta și în același folder (`scrieInFolder`), pe lângă descărcare. PDF-ul nu poate fi scris
+programatic (îl produce browserul din „Tipărire / PDF"): la tipărire titlul paginii devine numele machetei, ca
+„Salvează ca PDF" să-l propună; folderul îl alege utilizatorul în dialog, iar Chrome îl ține minte pe ultimul.
 
 ## Versionarea fișierelor (cache)
 

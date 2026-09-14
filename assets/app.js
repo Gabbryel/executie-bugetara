@@ -1,7 +1,7 @@
-import { ROWS } from './rows.js?v=20260914-114551';
-import { parseNum, r3, fmt, fmtLei } from './num.js?v=20260914-114551';
-import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20260914-114551';
-import * as store from './store.js?v=20260914-114551';
+import { ROWS } from './rows.js?v=20260914-194323';
+import { parseNum, r3, fmt, fmtLei } from './num.js?v=20260914-194323';
+import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20260914-194323';
+import * as store from './store.js?v=20260914-194323';
 
 const KEYS = ['e','f','g','h','i','j'];
 const lunaDinText = t => { const i = LUNI.findIndex(l=>new RegExp(l,'i').test(String(t||''))); return i<0?null:i+1; };
@@ -473,9 +473,22 @@ async function exportXlsx(){
   const all = {}; ROWS.forEach(r=>{ all[r.r] = vals[r.r]; });
   const luna = LUNI[state.meta.luna-1].toUpperCase();
   const blob = await buildXlsx(TPL.buf, all, { unitate:state.meta.unitate, titluLuna:`luna ${luna} ${state.meta.an}` });
-  download(blob, `Macheta Executie spital ${luna} ${state.meta.an}.xlsx`);
-  toast('Macheta exportată.');
+  const nume = `Macheta Executie spital ${luna} ${state.meta.an}.xlsx`;
+  download(blob, nume);
+  // si in folderul de salvare, langa AAAA-LL.json, daca e ales
+  const f = await scrieInFolder(nume, blob);
+  toast('Macheta exportată' + (f.nume ? ' și salvată în folderul „'+f.nume+'"' : '') + '.' + (f.eroare ? ' Folder: '+f.eroare : ''), !!f.eroare);
 }
+/** Scrie un fisier in folderul de salvare (daca e ales si are permisiune). Returneaza {nume} sau {eroare}, sau {} fara folder. */
+async function scrieInFolder(name, content){
+  if(!store.folder.suportat() || !(await store.folder.get())) return {};
+  const p = await store.folder.permisiune(true);
+  if(p!=='granted') return { eroare:'folderul de salvare nu are permisiune (alege-l din nou din meniu)' };
+  try{ await store.folder.scrie(name, content); return { nume:(await store.folder.get()).name||'ales' }; }
+  catch(e){ return { eroare:e.message }; }
+}
+/** La tiparire, titlul paginii devine numele fisierului: „Salvează ca PDF" il propune ca nume. Folderul il alege browserul (il tine minte pe ultimul). */
+function numePdf(){ return `Macheta Executie spital ${LUNI[state.meta.luna-1].toUpperCase()} ${state.meta.an}`; }
 function exportJson(){
   const b = new Blob([JSON.stringify(snapshot(),null,2)],{type:'application/json'});
   download(b, store.fileName(state.meta.an, state.meta.luna));
@@ -554,13 +567,8 @@ async function salveazaLuna(){
   const unde = ['în acest browser'];
   const erori = [];
   // 1. folderul de pe disc (fara token; permisiunea se cere la primul clic)
-  if(store.folder.suportat() && await store.folder.get()){
-    const p = await store.folder.permisiune(true);
-    if(p==='granted'){
-      try{ await store.folder.scrie(k+'.json', JSON.stringify(data, null, 2)); unde.push('în folderul „'+((await store.folder.get()).name||'ales')+'"'); }
-      catch(e){ erori.push('folder: '+e.message); }
-    } else erori.push('folderul de salvare nu are permisiune (alege-l din nou din meniu)');
-  }
+  const f = await scrieInFolder(k+'.json', JSON.stringify(data, null, 2));
+  if(f.nume) unde.push('în folderul „'+f.nume+'"'); else if(f.eroare) erori.push('folder: '+f.eroare);
   // 2. GitHub, doar daca e configurat cu token
   const c = store.cfg.get();
   if(c.owner && c.repo && store.cfg.token()){
@@ -705,6 +713,9 @@ function wire(){
   $('#luniClose').addEventListener('click', ()=>$('#luniDlg').close());
   document.addEventListener('keydown', e=>{ if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='s'){ e.preventDefault(); salveazaLuna(); } });
   $('#btnPdf').addEventListener('click', ()=>window.print());
+  const titlu = document.title;
+  window.addEventListener('beforeprint', ()=>{ document.title = numePdf(); });
+  window.addEventListener('afterprint', ()=>{ document.title = titlu; });
   $('#btnJson').addEventListener('click', exportJson);
   $('#btnNew').addEventListener('click', ()=>{ if(confirm('Golești formularul curent?')){ state=newState(); store.draft.clear(); bc39ref=null; importNote=null; prev=null; $('#bcRef').textContent=''; $('#prevHdr').hidden=true; $('#modeSeg').hidden=true; $('#modeDelta').disabled=true; $('#prevInfo').textContent='Nicio lună precedentă încărcată'; syncMetaInputs(); buildTable(); render(); }});
   $('#fPrev').addEventListener('change', e=>onFile(e.target,'prev'));
