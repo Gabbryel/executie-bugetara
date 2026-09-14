@@ -8,7 +8,7 @@ Rulează integral în browser. Se publică pe GitHub Pages.
 ## Ce face
 
 - **Completare asistată** a celor 121 de rânduri (8–128) ale foii `BC`. Rândurile de sinteză se calculează automat după arborele de agregare din machetă; se completează doar frunzele.
-- **Mod „delta"** — după ce încarci luna precedentă, completezi doar plățile lunii (col. 7) și delta cheltuielilor efective; coloanele cumulate (3, 5, 6, 8) se calculează singure. Col. 4 (credite de angajament) urmează col. 3 pe fiecare rând până tastezi o valoare în ea (celulă cu chenar punctat); golirea celulei o readuce la col. 3. Așa face și contabilul: col. 4 se reface lunar din col. 3, cu câteva rânduri rotunjite în sus la mii.
+- **Mod „delta"** — după ce încarci luna precedentă, completezi doar plățile lunii (col. 7) și delta cheltuielilor efective; coloanele cumulate (3, 5, 6, 8) se calculează singure. Col. 4 (credite de angajament) urmează col. 3 pe fiecare rând până tastezi o valoare în ea (celulă cu chenar punctat); golirea celulei o readuce la col. 3. Așa face și contabilul: col. 4 se reface lunar din col. 3, cu câteva rânduri rotunjite în sus la mii. La fel, coloana Δ (cheltuiala lunii pentru col. 8) urmează plata lunii (col. 7) până tastezi o valoare: în machetele reale col. 8 = col. 6 pe rândurile de personal, hrană și capital; diferă doar pe bunuri și servicii, unde există facturi înregistrate și neplătite.
 - **Lista de control** rulează la fiecare tastă:
   1. corelația cu fișa BC39 (r.8 col.3 × 1000 = Bugetar, col.4 × 1000 = Angajament);
   2. r.8: col.3 = col.5 = col.6;
@@ -21,7 +21,7 @@ Rulează integral în browser. Se publică pe GitHub Pages.
   În panoul „Verificări" apar ca elemente proprii doar corelația BC39, verificarea col. 8 și cele picate;
   verificările trecute care nu spun nimic nou (coloane legate, cumulat în delta, șablon, format BC39) se strâng
   într-o singură linie „Trec fără observații". Verificările 4 și 5 sunt avertismente, nu erori: machetele reale
-  le-au încălcat pe câte un rând. Când col. 8 nu e tastată deloc, verificarea 5 spune că a rămas la luna precedentă.
+  le-au încălcat pe câte un rând. Când nicio Δ nu e tastată, verificarea 5 e informativă: spune că col. 8 urmează col. 7 și pe ce rânduri luna precedentă avea facturi neplătite.
 - **Export `.xlsx` identic cu macheta CAS.** Aplicația nu generează un fișier nou: deschide șablonul original, scrie doar valorile și lasă neatinse formatarea, formulele, înălțimile de rând și setările de tipărire. Verificat prin recalculare: totalurile exportate coincid la a treia zecimală cu fișierele originale.
 - **Tipărire / PDF** direct din browser (A4 landscape), cu antetul și rubricile de semnătură.
 - **Salvarea lunii** dintr-un singur buton („Salvează luna" sau Ctrl/Cmd+S): luna intră în arhiva din browser și, dacă ai configurat depozitul, și în GitHub. Din „Luni salvate…" redeschizi oricare lună, o modifici și o salvezi din nou; poți folosi o lună salvată ca lună precedentă sau o poți exporta ca JSON.

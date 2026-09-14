@@ -28,6 +28,9 @@ Corelații verificate pe două luni reale (aprilie și iulie 2026):
   rotunjirile nu se moștenesc de la o lună la alta. De aceea în modul delta col. 4 urmează col. 3 pe fiecare
   rând (`din.f == null`, celulă cu chenar punctat) până tastezi o valoare; golirea celulei o readuce la automat.
   Ciornele cu `versiune < 2` copiau col. 4 din luna precedentă; `restore` le migrează.
+- Col. 8 (cheltuieli efective) = col. 6 pe rândurile de personal, hrană, capital; diferă doar pe bunuri și servicii
+  (r.44, 45, 52, 53, 61, 62, 64, 112, 116 în iulie 2026), unde sunt facturi înregistrate și neplătite. În delta,
+  Δ col. 8 urmează col. 7 (`din.dj == null`) până e tastată; ciornele cu `versiune < 3` aveau `dj = 0` = netastat.
 - Rândul 83 (programe naționale de sănătate) e 0: unitatea nu derulează PNS.
 - Formatul BC39 variază între luni (o coloană `Spital` sau două: `Total` + `Spital (inclusiv PNS)`).
   Fișa are și `An`, `Luna (cumulat)`, `Denumire` (ex. „SPINAL CARE SRL"), `Cod`; rândul `Angajament` vine
@@ -124,8 +127,8 @@ verificările trec. Pentru validarea exportului față de original, recalculeaz�
 
 Când adaugi o verificare: `chk(ok, titlu, detaliu, warnIfFail, scurt)`; `ok === null` = informativ. Cu `scurt`,
 verificarea trecută nu apare ca element propriu, ci în linia „Trec fără observații" (2, 3, 4, 6, 7 sunt tautologice
-în situația obișnuită: coloane legate, delta, șablon corect). Verificarea 5 are o formă separată când col. 8 nu e
-tastată deloc (în delta: toate Δ = 0) — spune că col. 8 a rămas la luna precedentă. Verificările 4 și 5 sunt
+în situația obișnuită: coloane legate, delta, șablon corect). Verificarea 5 e informativă când nicio Δ nu e
+tastată (col. 8 urmează col. 7) și listează rândurile cu facturi neplătite din luna precedentă. Verificările 4 și 5 sunt
 avertismente, nu erori: machetele reale le-au încălcat pe rânduri (aprilie 2026, r.52 și r.53/r.79).
 
 ## Layout și ghidare

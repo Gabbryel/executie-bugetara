@@ -1,7 +1,7 @@
-import { ROWS } from './rows.js?v=20260914-104428';
-import { parseNum, r3, fmt, fmtLei } from './num.js?v=20260914-104428';
-import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20260914-104428';
-import * as store from './store.js?v=20260914-104428';
+import { ROWS } from './rows.js?v=20260914-112952';
+import { parseNum, r3, fmt, fmtLei } from './num.js?v=20260914-112952';
+import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20260914-112952';
+import * as store from './store.js?v=20260914-112952';
 
 const KEYS = ['e','f','g','h','i','j'];
 const lunaDinText = t => { const i = LUNI.findIndex(l=>new RegExp(l,'i').test(String(t||''))); return i<0?null:i+1; };
@@ -24,7 +24,7 @@ let importNote = null;     // {title, det} — inconsecvente gasite in ultima ma
 function newState(){
   const d = new Date();
   const leaves = {}; const din = {};
-  LEAVES.forEach(r=>{ leaves[r]=blank(); din[r]={i:0,dj:0,f:null}; });   // f:null = col. 4 urmeaza col. 3
+  LEAVES.forEach(r=>{ leaves[r]=blank(); din[r]={i:0,dj:null,f:null}; });   // f:null = col. 4 urmeaza col. 3; dj:null = Δ col. 8 urmeaza col. 7
   return {
     meta:{ an:d.getFullYear(), luna:d.getMonth()+1, unitate:'SC SPINAL CARE DOBRECI SRL' },
     mode:'cumulat', linkEG:true, leaves, din, prevLabel:null
@@ -36,11 +36,13 @@ function recompute(){
   if(state.mode==='delta'){
     LEAVES.forEach(r=>{
       const p = prev && prev.leaves[r] ? prev.leaves[r] : blank();
-      const d = state.din[r] || {i:0,dj:0,f:null};
+      const d = state.din[r] || {i:0,dj:null,f:null};
       const L = state.leaves[r];
       L.i = r3(d.i);
       L.h = r3((p.h||0) + d.i);
-      L.j = r3((p.j||0) + d.dj);
+      // col. 8 (cheltuieli efective): cheltuiala lunii = plata lunii (col. 7) pana cand utilizatorul tasteaza Δ pe rand;
+      // in machetele reale col. 8 = col. 6 pe majoritatea randurilor, diferentele sunt facturi inregistrate si neplatite
+      L.j = r3((p.j||0) + (d.dj==null ? d.i : d.dj));
       if(state.linkEG){ L.e = L.h; L.g = L.h; }
       // col. 4 (credite de angajament) se reface lunar din col. 3, cu cateva randuri rotunjite in sus:
       // urmeaza col. 3 pana cand utilizatorul tasteaza o valoare pe rand (din.f != null)
@@ -117,16 +119,19 @@ function buildTable(){
   });
 }
 
-const col4Auto = (inp) => inp.dataset.src==='din.f' && state.din[+inp.dataset.r].f==null;
+/** Celula automata in delta: col. 4 fara valoare tastata urmeaza col. 3, Δ col. 8 fara valoare tastata urmeaza col. 7. */
+const celulaAuto = (inp) => (inp.dataset.src==='din.f' && state.din[+inp.dataset.r].f==null) || (inp.dataset.src==='din.dj' && state.din[+inp.dataset.r].dj==null);
+const TITLU_AUTO = { f:'Urmează col. 3. Tastează o valoare ca s-o fixezi; șterge-o ca să revină la col. 3.',
+                     dj:'Urmează col. 7 (cheltuiala lunii = plata lunii). Tastează cheltuiala lunii ca s-o fixezi; șterge-o ca să revină.' };
 function readInput(inp){
   const r = +inp.dataset.r, k = inp.dataset.k, src = inp.dataset.src;
-  if(col4Auto(inp)) return state.leaves[r].f||0;   // col. 4 automata: valoarea din col. 3
+  if(celulaAuto(inp)) return k==='f' ? (state.leaves[r].f||0) : (state.din[r].i||0);
   return src.startsWith('din') ? (state.din[r][k]||0) : (state.leaves[r][k]||0);
 }
 function onInput(e){
   const inp = e.target, r = +inp.dataset.r, k = inp.dataset.k;
-  // col. 4 golita revine la automat (urmeaza col. 3)
-  if(inp.dataset.src==='din.f' && inp.value.trim()===''){ state.din[r].f = null; render(); scheduleSave(); return; }
+  // col. 4 sau Δ golita revine la automat (urmeaza col. 3, respectiv col. 7)
+  if((inp.dataset.src==='din.f' || inp.dataset.src==='din.dj') && inp.value.trim()===''){ state.din[r][k] = null; render(); scheduleSave(); return; }
   const v = r3(parseNum(inp.value));
   if(inp.dataset.src.startsWith('din')) state.din[r][k] = v; else state.leaves[r][k] = v;
   render();
@@ -204,9 +209,9 @@ function render(){
     const v = readInput(inp);
     if(document.activeElement!==inp) inp.value = fmt(v);
     inp.classList.toggle('z', Math.abs(v)<1e-9);
-    const auto = col4Auto(inp);
+    const auto = celulaAuto(inp);
     inp.classList.toggle('auto', auto);
-    inp.title = auto ? 'Urmează col. 3. Tastează o valoare ca s-o fixezi; șterge-o ca să revină la col. 3.' : '';
+    inp.title = auto ? TITLU_AUTO[inp.dataset.k] : '';
   });
   const q = ($('#filtru').value||'').trim().toLowerCase();
   const hz = $('#hideZero').checked;
@@ -302,16 +307,21 @@ function runChecks(vals){
   const neg = LEAVES.filter(r=>(vals[r].j - vals[r].h) < -0.0005);
   const gap = r3(t.j - t.h);
   const reper = prev ? ` În ${prev.label} col. 8 depășea col. 6 cu ${fmt(r3(prev.totals.j - prev.totals.h))}.` : '';
-  // col. 8 netastata inca: in delta toate Δ sunt 0 (col. 8 a ramas la luna precedenta), in cumulat e goala
-  const col8Gol = state.mode==='delta' ? LEAVES.every(r=>Math.abs((state.din[r]||{}).dj||0)<1e-9) : Math.abs(t.j)<1e-9;
-  if(col8Gol && Math.abs(t.h)>1e-9){
-    out.push(chk(false,'Cheltuieli efective (col. 8) necompletate',
-      (state.mode==='delta' ? `Col. 8 a rămas la valorile din ${prev.label} (${fmt(t.j)}). Tastează în coloana Δ cheltuielile efective ale lunii ${LUNI[state.meta.luna-1]}, pe rânduri.`
-        : 'Col. 8 este goală. Completează cheltuielile efective cumulate pe rânduri.') + reper, true));
+  const deltaAuto = state.mode==='delta' && LEAVES.every(r=>(state.din[r]||{}).dj==null);
+  if(state.mode==='cumulat' && Math.abs(t.j)<1e-9 && Math.abs(t.h)>1e-9){
+    out.push(chk(false,'Cheltuieli efective (col. 8) necompletate','Col. 8 este goală. Completează cheltuielile efective cumulate pe rânduri.' + reper, true));
+  } else if(deltaAuto){
+    // nicio Δ tastata: col. 8 = luna precedenta + col. 7 pe toate randurile; decalajul fata de plati ramane cel din luna precedenta
+    const cuFacturi = LEAVES.filter(r=>{ const p=prev.leaves[r]||blank(); return (p.j - p.h) > 0.0005; });
+    out.push(chk(null,'Cheltuieli efective (col. 8)',
+      `Urmează plățile lunii (col. 7) pe toate rândurile: col. 8 = ${fmt(t.j)}, cu ${fmt(gap)} peste plăți, ca în ${prev.label}. ` +
+      `Dacă în ${LUNI[state.meta.luna-1]} s-au înregistrat facturi neplătite sau s-au plătit facturi mai vechi, tastează în coloana Δ cheltuiala lunii pe acele rânduri.` +
+      (cuFacturi.length ? ` În ${prev.label} aveau facturi neplătite rândurile ${cuFacturi.join(', ')}.` : '')));
   } else {
     // in aprilie 2026 macheta reala avea 2 randuri cu col. 8 sub col. 6, deci e avertisment
     out.push(chk(neg.length===0,'Cheltuieli efective ≥ plăți (col.8 ≥ col.6)',
-      (neg.length===0 ? `Col. 8 depășește plățile cu ${gap>=0?'+':''}${fmt(gap)} (facturi înregistrate și neplătite).`
+      (neg.length===0 ? `Col. 8 depășește plățile cu ${gap>=0?'+':''}${fmt(gap)} (facturi înregistrate și neplătite).` +
+          (state.mode==='delta' ? ` Δ tastată pe ${nr(LEAVES.filter(r=>state.din[r].dj!=null).length)}, restul urmează col. 7.` : '')
         : `${nr(neg.length)} ${neg.length===1?'are':'au'} cheltuieli efective (col. 8) sub plăți (col. 6): ${neg.slice(0,12).join(', ')}${neg.length>12?'…':''}. De regulă col. 8 ≥ col. 6 — verifică dacă e corect.`) + reper, true));
   }
 
@@ -365,7 +375,9 @@ function guidance(vals, checks){
   if(!bc39ref) return { cls:'info', text:`Rândul 8: Bugetar ${fmtLei(t.e*1000)} lei, Angajament ${fmtLei(t.f*1000)} lei. Importă fișa BC39 din meniul ⋯ ca să verific corelația automat.` };
   const warn = checks.find(c=>c.cls==='warn' && c.ic==='!');
   if(warn) return { cls:'warn', text:warn.title+': '+warn.det, more:true };
-  return { cls:'ok', text:'Se corelează cu BC39 ('+bc39ref.sursa+') și toate verificările trec. Poți exporta macheta .xlsx.' };
+  const deltaAuto = state.mode==='delta' && LEAVES.every(r=>(state.din[r]||{}).dj==null);
+  return { cls:'ok', text:'Se corelează cu BC39 ('+bc39ref.sursa+') și toate verificările trec. ' +
+    (deltaAuto ? 'Col. 8 urmează col. 7 (fără facturi neplătite noi); dacă e corect, poți exporta macheta .xlsx.' : 'Poți exporta macheta .xlsx.'), more: deltaAuto };
 }
 
 /* ---------- serializare ---------- */
@@ -373,7 +385,7 @@ function snapshot(withPrev){
   const vals = recompute();
   const totals = { e:vals[8].e, f:vals[8].f, g:vals[8].g, h:vals[8].h, i:vals[8].i, j:vals[8].j };
   return {
-    versiune:2, generat:new Date().toISOString(),
+    versiune:3, generat:new Date().toISOString(),
     meta:state.meta, mode:state.mode, linkEG:state.linkEG, prevLabel:state.prevLabel,
     total_r8:totals,
     bc39:{ bugetar:Math.round(totals.e*1000), angajament:Math.round(totals.f*1000) },
@@ -394,6 +406,10 @@ function restore(data){
   if(!(data.versiune>=2) && state.mode==='delta' && prev){
     LEAVES.forEach(r=>{ const d=state.din[r], pf=(prev.leaves[r]||blank()).f||0; if(!d.f || Math.abs(d.f-pf)<1e-9) d.f=null; });
   }
+  // pana la versiunea 2, Δ = 0 insemna „netastat"; acum Δ netastata (null) urmeaza col. 7
+  if(!(data.versiune>=3) && state.mode==='delta'){
+    LEAVES.forEach(r=>{ const d=state.din[r]; if(!d.dj) d.dj=null; });
+  }
   if(data.bc39ref && (data.bc39ref.bugetar!=null || data.bc39ref.angajament!=null)) setBc39(data.bc39ref);
   else { bc39ref = null; $('#bcRef').textContent=''; }
   importNote = null;
@@ -412,13 +428,13 @@ function treciPeDelta(anunta){
   if(!prev) return;
   state.mode = 'delta';
   LEAVES.forEach(r=>{
-    const L = state.leaves[r], d = state.din[r];
+    const p = prev.leaves[r]||blank(), L = state.leaves[r], d = state.din[r];
     if(!d.i && L.i) d.i = L.i;                                   // platile lunii tastate in col. 7
     if(!d.f) d.f = (L.f && Math.abs(L.f-L.e)>1e-9) ? L.f : null;   // col. 4 tastata diferit de col. 3 se pastreaza; altfel urmeaza col. 3
-    if(!d.dj && L.j) d.dj = r3(L.j - (p.j||0));                   // cheltuieli efective tastate cumulat
+    if(d.dj==null && L.j) d.dj = r3(L.j - (p.j||0));              // cheltuieli efective tastate cumulat; altfel Δ urmeaza col. 7
   });
   syncMetaInputs(); buildTable(); render(); scheduleSave();
-  if(anunta) toast(`Mod „delta" față de ${prev.label}: completezi plățile lunii (col. 7) și delta cheltuielilor efective; cumulatele pornesc de la ${prev.label}. Col. 4 urmează col. 3 — tastezi doar rândurile pe care le rotunjești.`);
+  if(anunta) toast(`Mod „delta" față de ${prev.label}: completezi plățile lunii (col. 7) și delta cheltuielilor efective; cumulatele pornesc de la ${prev.label}. Col. 4 urmează col. 3 și Δ col. 8 urmează col. 7 — tastezi doar rândurile care diferă.`);
 }
 /** Dupa incarcarea lunii precedente: daca luna curenta nu are inca date cumulate, treci automat pe delta. */
 function dupaPrev(){ if(state.mode==='cumulat' && faraCumulat()) setTimeout(()=>treciPeDelta(true), 50); }
