@@ -234,8 +234,10 @@ dialog::backdrop{background:rgba(8,10,14,.5)}
   .printhead{display:block!important}
   .signrow{display:flex!important}
   .dcol{display:none!important}
-  td.num input{border:0!important;background:transparent!important;padding:0!important;text-align:right;font-size:8.2pt;color:#000;box-shadow:none}
-  tbody tr:not(.sum) td.calc{background:transparent;color:#000}
+  td.num input{border:0!important;background:transparent!important;padding:0!important;text-align:right;font-size:8.2pt;box-shadow:none}
   .colhl{display:none!important}
-  td.num input.z{color:#000}
+  /* pe hartie totul e negru pe alb, indiferent de tema si de starea celulei (automata, zero, rosu/verde fata de BC39) */
+  .app,.main,.tablewrap,table,tbody tr:not(.sum) td{background:#fff!important}
+  tr.sum td{background:transparent!important}   /* fundalul #eee al randului de sinteza sa se vada */
+  table th,table td,table input,table small,table b,.rn{color:#000!important}
 }

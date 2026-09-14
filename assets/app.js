@@ -1,7 +1,7 @@
-import { ROWS } from './rows.js?v=20260914-112952';
-import { parseNum, r3, fmt, fmtLei } from './num.js?v=20260914-112952';
-import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20260914-112952';
-import * as store from './store.js?v=20260914-112952';
+import { ROWS } from './rows.js?v=20260914-114551';
+import { parseNum, r3, fmt, fmtLei } from './num.js?v=20260914-114551';
+import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20260914-114551';
+import * as store from './store.js?v=20260914-114551';
 
 const KEYS = ['e','f','g','h','i','j'];
 const lunaDinText = t => { const i = LUNI.findIndex(l=>new RegExp(l,'i').test(String(t||''))); return i<0?null:i+1; };
@@ -346,7 +346,7 @@ function runChecks(vals){
   const errs = out.filter(c=>c.cls==='err').length;
   const g = guidance(vals, out);
   const gd = $('#guide');
-  gd.className = 'guide '+g.cls;
+  gd.className = 'guide noprint '+g.cls;   // noprint trebuie pastrat: linia nu apare in PDF
   gd.innerHTML = `<span class="ic"></span><span class="tx">${g.text}</span>` + (g.more ? `<button class="lnk" id="guideMore">Toate verificările</button>` : '') + (g.reload ? `<button class="btn pri" id="guideReload">Reîncarcă aplicația</button>` : '');
   const badge = $('#chkBadge');
   badge.textContent = errs ? String(errs) : '✓';
