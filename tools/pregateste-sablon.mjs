@@ -2,7 +2,8 @@
 //  - golește valorile (celulele cu valoare primesc 0, cele goale raman goale), pastrand stilurile;
 //  - pe randurile-frunza scoate formulele (in machetele reale: H54, H63 = G+I; J50, J63 trimit la coloana K, care nu exista);
 //  - pe randurile de sinteza, o formula care nu urmeaza structura din coloana E se reface din ea (ex. I117 = H117);
-//  - sterge valorile salvate ale formulelor si cere recalcularea la deschidere (fullCalcOnLoad), fara calcChain.
+//  - sterge valorile salvate ale formulelor si cere recalcularea la deschidere (fullCalcOnLoad), fara calcChain;
+//  - sterge autorul si ultima modificare din proprietatile fisierului (sablonul e public).
 // Formatarea, setarile de tiparire si restul foii raman neatinse.
 //   node tools/pregateste-sablon.mjs "Macheta CAS.xlsx" template/macheta.xlsx
 // Dupa inlocuirea sablonului: node tools/genereaza-rows.mjs (si --scrie, daca s-a schimbat structura).
@@ -70,6 +71,15 @@ export async function pregatesteSablon(buf){
     zip.file(rels, (await zip.file(rels).async('string')).replace(/<Relationship\b[^>]*calcChain[^>]*\/>/g,''));
     zip.file(ct, (await zip.file(ct).async('string')).replace(/<Override\b[^>]*calcChain[^>]*\/>/g,''));
     jurnal.push('calcChain.xml șters');
+  }
+  // proprietatile fisierului (autor, ultima modificare, tiparire) contin nume de persoane: sablonul e public
+  const core = 'docProps/core.xml';
+  if(zip.file(core)){
+    const x = await zip.file(core).async('string');
+    const y = x.replace(/<dc:creator>[^<]*<\/dc:creator>/, '<dc:creator></dc:creator>')
+               .replace(/<cp:lastModifiedBy>[^<]*<\/cp:lastModifiedBy>/, '<cp:lastModifiedBy></cp:lastModifiedBy>')
+               .replace(/<cp:lastPrinted>[^<]*<\/cp:lastPrinted>/, '');
+    if(y!==x){ zip.file(core, y); jurnal.push('autorul și ultima modificare șterse din proprietățile fișierului'); }
   }
   return { buf: await zip.generateAsync({ type:'nodebuffer', compression:'DEFLATE' }), jurnal, rows: rows.length, frunze: rows.filter(r=>!r.ch).length };
 }

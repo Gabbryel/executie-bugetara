@@ -1,7 +1,7 @@
 // Calculul machetei, fara DOM: agregare, modul delta, luna precedenta, repartizarea col. 4.
 // Testat in tests/calc.test.js; app.js il foloseste pentru tabel si verificari.
-import { ROWS } from './rows.js?v=20261014-132140';
-import { r3, parseNum } from './num.js?v=20261014-132140';
+import { ROWS } from './rows.js?v=20261014-132809';
+import { r3, parseNum } from './num.js?v=20261014-132809';
 
 export const KEYS = ['e','f','g','h','i','j'];
 export const LUNI = ['ianuarie','februarie','martie','aprilie','mai','iunie','iulie','august','septembrie','octombrie','noiembrie','decembrie'];

@@ -1,10 +1,10 @@
-import { ROWS } from './rows.js?v=20261014-132140';
-import { parseNum, r3, fmt, fmtLei } from './num.js?v=20261014-132140';
-import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20261014-132140';
-import * as store from './store.js?v=20261014-132140';
+import { ROWS } from './rows.js?v=20261014-132809';
+import { parseNum, r3, fmt, fmtLei } from './num.js?v=20261014-132809';
+import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20261014-132809';
+import * as store from './store.js?v=20261014-132809';
 import { KEYS, LUNI, LEAVES, blank, dinGol, aggregate, recompute as calculeaza, dinDinCumulat, lunaDinText, anDinText,
   lunaAnDinEticheta, numeLunaAn, lunaUrmatoare, bazaInceputAn, starePrecedenta, precedentaAsteptata, col7Inconsecvent,
-  faraCumulat as faraCumulatIn, aceleasiFrunze, repartizeazaCol4, curataStare } from './calc.js?v=20261014-132140';
+  faraCumulat as faraCumulatIn, aceleasiFrunze, repartizeazaCol4, curataStare } from './calc.js?v=20261014-132809';
 
 const byRow = Object.fromEntries(ROWS.map(r=>[r.r, r]));
 const cuvCheie = t => String(t||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')

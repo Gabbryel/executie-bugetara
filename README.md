@@ -89,18 +89,22 @@ assets/store.js          GitHub Contents API + localStorage
 assets/rows.js           modelul celor 121 de rânduri, generat din macheta CAS
 assets/num.js            parsare/formatare numerică românească
 assets/jszip.min.js      JSZip 3.10.1 (local, fără CDN)
-template/macheta.xlsx    șablonul CAS, cu valorile golite
+template/macheta.xlsx    formularul CAS original (decembrie 2025), cu valorile golite
 ```
 
 ## Șablonul
 
-`template/macheta.xlsx` este macheta CAS originală, cu trei corecții față de fișierul primit pe iulie 2026:
+`template/macheta.xlsx` este formularul CAS original, gol (ediția „decembrie 2025, cu 3 zecimale"), pregătit cu
+`tools/pregateste-sablon.mjs`: valorile golite, cache-ul formulelor șters (`fullCalcOnLoad`, Excel recalculează la
+deschidere), autorul scos din proprietățile fișierului. Numerele au formatul formularului, `#,##0.000` (3 zecimale, cu
+separator de mii), ca pe ecranul aplicației și în PDF.
 
-- `I117` avea `=H117` (coloana „Luna curentă" copia cumulatul) — restaurat la `=+I119+I118`, forma corectă din macheta de aprilie;
-- `J50`, `J63` trimiteau la coloana `K`, care nu există în machetă — transformate în celule de valoare;
-- `H54`, `H63` aveau formule acolo unde toate celelalte rânduri au valori statice — uniformizate.
+Formularul original e corect. Machetele completate în 2026 au adus trei abateri, pe care unealta le corectează dacă
+apar într-un fișier nou:
 
-Valorile au fost golite, iar cache-ul formulelor șters (`fullCalcOnLoad`), astfel încât Excel recalculează la deschidere.
+- `I117` avea `=H117` (coloana „Luna curentă" copia cumulatul) — forma corectă este `=+I119+I118`;
+- `J50`, `J63` trimiteau la coloana `K`, care nu există în machetă — devin celule de valoare;
+- `H54`, `H63` aveau formule acolo unde toate celelalte rânduri au valori statice — devin celule de valoare.
 
 **Când CAS trimite o machetă nouă**:
 
@@ -111,7 +115,7 @@ node tools/genereaza-rows.mjs --scrie    # doar dacă s-a schimbat: rescrie asse
 npm test
 ```
 
-Pregătirea aplicată pe macheta din iulie 2026 produce exact șablonul din depozit.
+Pregătirea aplicată pe formularul CAS din decembrie 2025 produce exact șablonul din depozit; aplicată pe macheta completată din iulie 2026, găsește cele trei abateri de mai sus și produce aceleași formule.
 
 ## Teste
 

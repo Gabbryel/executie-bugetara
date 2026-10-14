@@ -56,7 +56,7 @@ assets/xlsx.js             citire/scriere .xlsx prin editarea XML-ului din pache
 assets/store.js            GitHub Contents API (depozit = bază de date) + localStorage + folder pe disc
 assets/num.js              parsare/formatare numerică românească (virgulă zecimală)
 assets/jszip.min.js        JSZip 3.10.1 vendorizat — fără CDN
-template/macheta.xlsx      șablonul CAS cu valorile golite și 3 formule corectate
+template/macheta.xlsx      formularul CAS original (decembrie 2025, `#,##0.000`), golit, fără autor
 tools/genereaza-rows.mjs   rows.js din șablon (fără argumente: verifică; --scrie: rescrie)
 tools/pregateste-sablon.mjs șablonul dintr-o machetă CAS nouă (golește, corectează, fullCalcOnLoad)
 tools/jszip-node.mjs       JSZip vendorizat încărcat în Node, fără npm
@@ -79,7 +79,9 @@ descrescător. Rândul 38 („Contribuții, din care:") e static în șablon, da
    `node tools/pregateste-sablon.mjs "<macheta CAS>.xlsx" template/macheta.xlsx` (golește valorile, scoate
    formulele de pe rândurile-frunză, reface formulele de sinteză abătute de la coloana E, ex. I117), apoi
    `node tools/genereaza-rows.mjs` (și `--scrie` dacă s-a schimbat structura) și `npm test`.
-   Unealta reproduce exact șablonul actual din macheta de iulie 2026.
+   Șablonul actual = formularul CAS gol din decembrie 2025 trecut prin unealtă (are 0 abateri; cele trei
+   corectate — I117, H54/H63, J50/J63 — au apărut în machetele contabilului din 2026). Unealta scoate și autorul
+   din `docProps/core.xml`: șablonul e public, iar fiecare export îl moștenea.
 3. **Modul delta depinde de luna precedentă.** Ciorna, arhiva, „Export JSON" și GitHub salvează și `prev`
    (cu `an`, `luna`); `restore` golește luna precedentă încărcată înainte și ia doar ce e în fișier. La restaurare
    fără `prev`, aplicația trece pe `cumulat` și păstrează valorile. Nu schimba această cădere.

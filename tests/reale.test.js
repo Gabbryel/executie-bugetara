@@ -1,6 +1,7 @@
 // Verificari pe machetele reale, tinute in afara depozitului. Fara MACHETE_DIR testele se sar.
 //   MACHETE_DIR=~/priv/machete npm test
-// Directorul contine „Macheta Executie spital <LUNA> <AN>.xlsx" si, optional, „BC39-<luna>.xlsx".
+// Directorul contine „Macheta Executie spital <LUNA> <AN>.xlsx", optional „BC39-<luna>.xlsx" si formularul CAS
+// gol din care e facut sablonul („MACHETA Executie pe spital decembrie 2025 ….xlsx").
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'fs';
@@ -71,10 +72,10 @@ test('import → export in sablon → import: aceleasi valori pe toate randurile
   }
 });
 
-test('sablonul din depozit = macheta din iulie 2026 pregatita cu tools/pregateste-sablon.mjs', { skip:sari }, async ()=>{
-  const x = (await machete()).find(x=>x.cheie==='2026-07'); if(!x) return;
+test('sablonul din depozit = formularul CAS (decembrie 2025) pregatit cu tools/pregateste-sablon.mjs', { skip:sari }, async ()=>{
+  const f = fs.readdirSync(DIR).find(f=>/^MACHETA .*decembrie 2025.*\.xlsx$/i.test(f)); if(!f) return;
   const JSZip = globalThis.JSZip;
   const foaie = async buf => (await JSZip.loadAsync(buf)).file('xl/worksheets/sheet1.xml').async('string');
-  const rez = await pregatesteSablon(x.buf);
+  const rez = await pregatesteSablon(fs.readFileSync(path.join(DIR, f)));
   assert.equal(await foaie(rez.buf), await foaie(fs.readFileSync(new URL('../template/macheta.xlsx', import.meta.url))));
 });
