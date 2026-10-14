@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com;">
 <title>Execuție bugetară — machetă CAS</title>
-<link rel="stylesheet" href="assets/styles.css?v=20261014-115358">
+<link rel="stylesheet" href="assets/styles.css?v=20261014-120834">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>📊</text></svg>">
 </head>
 <body>
@@ -102,8 +102,8 @@
 </dialog>
 
 <dialog id="ghDlg">
-  <div class="dlg-h"><h3>Bază de date în GitHub</h3><button class="btn" id="ghClose">Închide</button></div>
-  <div class="dlg-b">
+  <div class="dlg-h"><h3>Bază de date în GitHub</h3><button class="btn" id="ghClose" type="button">Închide</button></div>
+  <form class="dlg-b" onsubmit="event.preventDefault()">
     <p class="muted" style="margin-top:0">Fiecare lună se salvează ca <code>data/AAAA-LL.json</code> într-un depozit GitHub. Depozitul este baza de date; istoricul commit-urilor este jurnalul de modificări.</p>
     <div class="cols2">
       <label class="fld"><span>Owner (user / org)</span><input type="text" id="ghOwner" placeholder="ex. gabriel"></label>
@@ -111,18 +111,18 @@
       <label class="fld"><span>Branch</span><input type="text" id="ghBranch" value="main"></label>
       <label class="fld"><span>Director</span><input type="text" id="ghDir" value="data"></label>
     </div>
-    <label class="fld" style="margin-top:10px"><span>Token (fine-grained PAT, Contents: read and write)</span><input type="password" id="ghTok" placeholder="github_pat_…"></label>
+    <label class="fld" style="margin-top:10px"><span>Token (fine-grained PAT, Contents: read and write)</span><input type="password" id="ghTok" autocomplete="current-password" placeholder="github_pat_…"></label>
     <div class="warnbox">Tokenul se păstrează doar în <b>localStorage</b>, în acest browser. Oricine folosește acest profil de browser îl poate extrage. Emite un token <i>fine-grained</i> limitat la un singur depozit privat, cu expirare scurtă, și șterge-l când nu îl mai folosești. Fără token se poate doar citi, și numai dintr-un depozit public.</div>
     <div class="row-inline" style="margin-top:12px">
-      <button class="btn pri" id="ghSaveCfg">Salvează setările și testează</button>
-      <button class="btn" id="ghPush">Salvează luna curentă în GitHub</button>
+      <button class="btn pri" type="button" id="ghSaveCfg">Salvează setările și testează</button>
+      <button class="btn" type="button" id="ghPush">Salvează luna curentă în GitHub</button>
     </div>
     <p class="status-inline" id="ghStatus"></p>
     <div id="ghList" class="gh-list"></div>
-  </div>
+  </form>
 </dialog>
 
-<script src="assets/jszip.min.js?v=20261014-115358"></script>
-<script type="module" src="assets/app.js?v=20261014-115358"></script>
+<script src="assets/jszip.min.js?v=20261014-120834"></script>
+<script type="module" src="assets/app.js?v=20261014-120834"></script>
 </body>
 </html>

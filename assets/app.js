@@ -1,7 +1,7 @@
-import { ROWS } from './rows.js?v=20261014-115358';
-import { parseNum, r3, fmt, fmtLei } from './num.js?v=20261014-115358';
-import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20261014-115358';
-import * as store from './store.js?v=20261014-115358';
+import { ROWS } from './rows.js?v=20261014-120834';
+import { parseNum, r3, fmt, fmtLei } from './num.js?v=20261014-120834';
+import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20261014-120834';
+import * as store from './store.js?v=20261014-120834';
 
 const KEYS = ['e','f','g','h','i','j'];
 const lunaDinText = t => { const i = LUNI.findIndex(l=>new RegExp(l,'i').test(String(t||''))); return i<0?null:i+1; };
@@ -12,6 +12,7 @@ const cuvCheie = t => String(t||'').toUpperCase().normalize('NFD').replace(/[\u0
   .replace(/[^A-Z0-9 ]/g,' ').split(/\s+/).filter(w=>w && !['SC','SRL','SA','S','C'].includes(w));
 const aceeasiUnitate = (a,b) => { const A=cuvCheie(a), B=cuvCheie(b); return A.length && B.length && (A.every(w=>B.includes(w)) || B.every(w=>A.includes(w))); };
 const LEAVES = ROWS.filter(r=>!r.ch).map(r=>r.r);
+const $ = s => document.querySelector(s);
 const blank = () => Object.fromEntries(KEYS.map(k=>[k,0]));
 const escHtml = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const COL_NAMES = ['Credite bugetare aprobate (col. 3)', 'Credite de angajament (col. 4)', 'Credite trimestriale cumulate (col. 5)', 'Plăți nete de casă cumulat (col. 6)', 'Luna curentă (col. 7)', 'Cheltuieli efective (col. 8)'];
