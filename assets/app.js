@@ -1,7 +1,7 @@
-import { ROWS } from './rows.js?v=20260914-194323';
-import { parseNum, r3, fmt, fmtLei } from './num.js?v=20260914-194323';
-import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20260914-194323';
-import * as store from './store.js?v=20260914-194323';
+import { ROWS } from './rows.js?v=20261014-115358';
+import { parseNum, r3, fmt, fmtLei } from './num.js?v=20261014-115358';
+import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20261014-115358';
+import * as store from './store.js?v=20261014-115358';
 
 const KEYS = ['e','f','g','h','i','j'];
 const lunaDinText = t => { const i = LUNI.findIndex(l=>new RegExp(l,'i').test(String(t||''))); return i<0?null:i+1; };
@@ -12,8 +12,9 @@ const cuvCheie = t => String(t||'').toUpperCase().normalize('NFD').replace(/[\u0
   .replace(/[^A-Z0-9 ]/g,' ').split(/\s+/).filter(w=>w && !['SC','SRL','SA','S','C'].includes(w));
 const aceeasiUnitate = (a,b) => { const A=cuvCheie(a), B=cuvCheie(b); return A.length && B.length && (A.every(w=>B.includes(w)) || B.every(w=>A.includes(w))); };
 const LEAVES = ROWS.filter(r=>!r.ch).map(r=>r.r);
-const $ = s => document.querySelector(s);
 const blank = () => Object.fromEntries(KEYS.map(k=>[k,0]));
+const escHtml = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+const COL_NAMES = ['Credite bugetare aprobate (col. 3)', 'Credite de angajament (col. 4)', 'Credite trimestriale cumulate (col. 5)', 'Plăți nete de casă cumulat (col. 6)', 'Luna curentă (col. 7)', 'Cheltuieli efective (col. 8)'];
 
 let TPL = null;            // {buf, check}
 let state = newState();
@@ -94,18 +95,19 @@ function buildTable(){
       const derived = state.mode==='delta' && (k==='h'||k==='j');
       if(locked||derived) return `<td class="num calc" data-calc="${row.r}.${k}">0,000</td>`;
       const src = (state.mode==='delta' && k==='f') ? 'din.f' : (state.mode==='delta' && k==='i') ? 'din.i' : 'leaf.'+k;
-      return `<td class="num"><input type="text" inputmode="decimal" data-r="${row.r}" data-k="${k}" data-src="${src}" data-col="${idx}" value="0,000"></td>`;
+      const aria = `aria-label="rând ${row.r} ${escHtml(row.lbl)} — ${COL_NAMES[idx]}"`;
+      return `<td class="num"><input type="text" inputmode="decimal" ${aria} data-r="${row.r}" data-k="${k}" data-src="${src}" data-col="${idx}" value="0,000"></td>`;
     }).join('');
     const dcell = isSum
       ? `<td class="num calc dcol">—</td>`
-      : `<td class="num dcol"><input type="text" inputmode="decimal" data-r="${row.r}" data-k="dj" data-src="din.dj" data-col="6" value="0,000"></td>`;
+      : `<td class="num dcol"><input type="text" inputmode="decimal" aria-label="rând ${row.r} ${escHtml(row.lbl)} — Δ cheltuieli efective luna" data-r="${row.r}" data-k="dj" data-src="din.dj" data-col="6" value="0,000"></td>`;
     // in macheta, unele randuri au textul indicatorului in coloana de cod (ex. r.110): il mutam in coloana de denumire
     const codes = [row.sub, row.tit, row.alin].map(c=>String(c||''));
     const lung = codes.filter(c=>c.length>8);
     const lbl = [row.lbl, ...lung].filter(Boolean).join(' ');
     return `<tr data-row="${row.r}" class="${isSum?'sum l'+Math.min(row.lvl,3):''}">
-      ${codes.map(c=>`<td class="code">${c.length>8?'':c}</td>`).join('')}
-      <td class="lbl" style="padding-left:${pad}px"><span class="rn">${row.r}</span> ${lbl}</td>
+      ${codes.map(c=>`<td class="code">${c.length>8?'':escHtml(c)}</td>`).join('')}
+      <td class="lbl" style="padding-left:${pad}px"><span class="rn">${row.r}</span> ${escHtml(lbl)}</td>
       ${cells}${dcell}</tr>`;
   }).join('');
   $('#tbl').innerHTML = head + '<tbody>' + body + '</tbody>';
@@ -347,7 +349,7 @@ function runChecks(vals){
   const g = guidance(vals, out);
   const gd = $('#guide');
   gd.className = 'guide noprint '+g.cls;   // noprint trebuie pastrat: linia nu apare in PDF
-  gd.innerHTML = `<span class="ic"></span><span class="tx">${g.text}</span>` + (g.more ? `<button class="lnk" id="guideMore">Toate verificările</button>` : '') + (g.reload ? `<button class="btn pri" id="guideReload">Reîncarcă aplicația</button>` : '');
+  gd.innerHTML = `<span class="ic"></span><span class="tx">${escHtml(g.text)}</span>` + (g.more ? `<button class="lnk" id="guideMore">Toate verificările</button>` : '') + (g.reload ? `<button class="btn pri" id="guideReload">Reîncarcă aplicația</button>` : '');
   const badge = $('#chkBadge');
   badge.textContent = errs ? String(errs) : '✓';
   badge.className = errs ? 'err' : 'ok';
@@ -360,7 +362,7 @@ function chk(ok, title, det, warnIfFail, scurt){
   const ic  = ok===null ? '?' : ok ? '✓' : '!';
   return { cls, ic, title, det, scurt };
 }
-const chkHtml = c => `<div class="chk ${c.cls}"><span class="ic">${c.ic}</span><span><b>${c.title}</b><span class="det">${c.det}</span></span></div>`;
+const chkHtml = c => `<div class="chk ${c.cls}"><span class="ic">${c.ic}</span><span><b>${escHtml(c.title)}</b><span class="det">${escHtml(c.det)}</span></span></div>`;
 
 /* ---------- ghidare: o singura linie care spune ce urmeaza ---------- */
 function guidance(vals, checks){
@@ -594,7 +596,7 @@ async function actualizeazaFolderInfo(){
   const h = await store.folder.get();
   if(!h){ el.textContent = 'Niciun folder ales — lunile se salvează doar în browser.'; return; }
   const p = await store.folder.permisiune(false);
-  el.innerHTML = `Folder: <b>${h.name||'(ales)'}</b>` + (p==='granted' ? '' : ' · <span class="muted">permisiunea se cere la prima salvare</span>') +
+  el.innerHTML = `Folder: <b>${escHtml(h.name||'(ales)')}</b>` + (p==='granted' ? '' : ' · <span class="muted">permisiunea se cere la prima salvare</span>') +
     ` · <a href="#" id="folderUita">uită folderul</a>`;
   $('#folderUita').addEventListener('click', async e=>{ e.preventDefault(); await store.folder.uita(); actualizeazaFolderInfo(); toast('Folderul a fost uitat; lunile se salvează doar în browser.'); });
 }
@@ -627,14 +629,16 @@ async function listeazaLuni(){
   if(!keys.length){ el.innerHTML = '<div class="muted">Nicio lună salvată încă. Completează formularul și apasă „Salvează luna".</div>'; return; }
   el.innerHTML = keys.map(k=>{ const S=surse[k]; const d=S.disc||S.browser; const t=d.total_r8||{};
     const src = (S.disc?'<span class="src disc">disc</span>':'') + (S.browser?'<span class="src">browser</span>':'');
+    const safeK = escHtml(k);
+    const safeNume = escHtml(numeLunii(k));
     return `<div class="luna-i ${k===cur?'cur':''}">
-      <div><div class="n">${numeLunii(k)}${k===cur?' <span class="muted">(în lucru)</span>':''}${src}</div>
+      <div><div class="n">${safeNume}${k===cur?' <span class="muted">(în lucru)</span>':''}${src}</div>
         <div class="d">plăți cumulate ${fmt(t.h||0)} · luna ${fmt(t.i||0)} · salvat ${d.salvat||d.generat ? new Date(d.salvat||d.generat).toLocaleString('ro-RO') : '—'}</div></div>
       <div class="acts">
-        <button class="btn" data-act="open" data-k="${k}">Deschide</button>
-        <button class="btn" data-act="prev" data-k="${k}">Ca lună precedentă</button>
-        <button class="btn" data-act="json" data-k="${k}">JSON</button>
-        <button class="btn" data-act="del" data-k="${k}">Șterge</button>
+        <button class="btn" data-act="open" data-k="${safeK}">Deschide</button>
+        <button class="btn" data-act="prev" data-k="${safeK}">Ca lună precedentă</button>
+        <button class="btn" data-act="json" data-k="${safeK}">JSON</button>
+        <button class="btn" data-act="del" data-k="${safeK}">Șterge</button>
       </div></div>`; }).join('');
   el.querySelectorAll('button[data-act]').forEach(b=>b.addEventListener('click', ()=>{
     const k=b.dataset.k;
@@ -653,12 +657,15 @@ async function ghRefresh(){
     const acc = await store.checkAccess();
     const months = await store.listMonths();
     $('#ghStatus').textContent = `${acc.full} · ${acc.private?'privat':'public'} · ${acc.push?'scriere permisă':'doar citire'}`;
-    el.innerHTML = months.length ? months.map(m=>`<div class="row-inline" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:5px 0">
-        <b>${m.name}</b>
+    el.innerHTML = months.length ? months.map(m=>{
+      const safeN = escHtml(m.name);
+      return `<div class="row-inline" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:5px 0">
+        <b>${safeN}</b>
         <span class="row-inline">
-          <button class="btn" data-gh="cur" data-n="${m.name}">Deschide</button>
-          <button class="btn" data-gh="prev" data-n="${m.name}">Ca lună precedentă</button>
-        </span></div>`).join('')
+          <button class="btn" data-gh="cur" data-n="${safeN}">Deschide</button>
+          <button class="btn" data-gh="prev" data-n="${safeN}">Ca lună precedentă</button>
+        </span></div>`;
+    }).join('')
       : '<div class="muted">Niciun fișier în directorul de date încă.</div>';
     el.querySelectorAll('button[data-gh]').forEach(b=>b.addEventListener('click', ()=>ghLoad(b.dataset.n, b.dataset.gh)));
   }catch(e){ el.innerHTML=''; $('#ghStatus').textContent = 'Eroare: '+e.message; }
@@ -683,9 +690,20 @@ async function ghSave(){
 
 /* ---------- diverse ---------- */
 let saveTimer;
-function scheduleSave(){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ store.draft.save(snapshot(true)); marcheazaModificari(); }, 600); }
+function scheduleSave(){
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{
+    const ok = store.draft.save(snapshot(true));
+    if(!ok) toast('Atenție: Cota localStorage a fost depășită. Ciorna curentă nu a putut fi salvată automat.', true);
+    marcheazaModificari();
+  }, 600);
+}
 function toast(msg, bad){ const s=$('#status'); s.textContent=msg; s.classList.toggle('bad', !!bad); clearTimeout(toast._t); toast._t=setTimeout(()=>{s.textContent='';},6000); }
-function setSide(open){ document.body.classList.toggle('side-open', open); }
+function setSide(open){
+  const deschis = document.body.classList.toggle('side-open', open);
+  if(deschis){ $('#btnSideClose')?.focus(); }
+  else { $('#btnSide')?.focus(); }
+}
 function syncMetaInputs(){
   $('#an').value = state.meta.an; $('#luna').value = state.meta.luna; $('#unitate').value = state.meta.unitate;
   $('#modeCumulat').checked = state.mode==='cumulat'; $('#modeDelta').checked = state.mode==='delta';

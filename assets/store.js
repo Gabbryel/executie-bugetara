@@ -5,7 +5,15 @@ const LS_TOK = 'execbug.tok';
 const LS_DRAFT = 'execbug.draft';
 const API = 'https://api.github.com';
 
-const b64enc = s => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+const b64enc = s => {
+  const bytes = new TextEncoder().encode(s);
+  let bin = '';
+  const chunk = 8192;
+  for(let i=0; i<bytes.length; i+=chunk){
+    bin += String.fromCharCode(...bytes.subarray(i, i+chunk));
+  }
+  return btoa(bin);
+};
 const b64dec = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\n/g,'')), c=>c.charCodeAt(0)));
 
 export const cfg = {
@@ -21,13 +29,29 @@ export const luni = {
   all(){ try{ return JSON.parse(localStorage.getItem(LS_LUNI)||'{}'); }catch{ return {}; } },
   keys(){ return Object.keys(this.all()).sort().reverse(); },
   get(k){ return this.all()[k] || null; },
-  set(k, data){ const a=this.all(); a[k]=data; localStorage.setItem(LS_LUNI, JSON.stringify(a)); },
+  set(k, data){
+    const a=this.all(); a[k]=data;
+    try{ localStorage.setItem(LS_LUNI, JSON.stringify(a)); }
+    catch(e){ throw new Error('Memoria browserului este plină (localStorage): ' + (e.message||e)); }
+  },
   remove(k){ const a=this.all(); delete a[k]; try{ localStorage.setItem(LS_LUNI, JSON.stringify(a)); }catch{} }
 };
 
 // Folder de salvare pe disc (File System Access API, Chrome/Edge). Handle-ul se pastreaza in IndexedDB.
 function idb(){ return new Promise((res,rej)=>{ const r=indexedDB.open('execbug',1); r.onupgradeneeded=()=>r.result.createObjectStore('kv'); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
-async function kv(op, k, v){ const db=await idb(); return new Promise((res,rej)=>{ const st=db.transaction('kv', op==='get'?'readonly':'readwrite').objectStore('kv'); const t = op==='get'?st.get(k): op==='set'?st.put(v,k): st.delete(k); t.onsuccess=()=>res(t.result); t.onerror=()=>rej(t.error); }); }
+async function kv(op, k, v){
+  const db = await idb();
+  return new Promise((res,rej)=>{
+    const tx = db.transaction('kv', op==='get'?'readonly':'readwrite');
+    const st = tx.objectStore('kv');
+    const t = op==='get'?st.get(k): op==='set'?st.put(v,k): st.delete(k);
+    t.onsuccess=()=>res(t.result);
+    t.onerror=()=>rej(t.error);
+    tx.oncomplete=()=>db.close();
+    tx.onabort=()=>db.close();
+    tx.onerror=()=>db.close();
+  });
+}
 const NUME_LUNA = /^(\d{4})-(\d{2})\.json$/;
 let folderHandle = null;
 export const folder = {
@@ -50,7 +74,14 @@ export const folder = {
   async scrie(name, text){
     const h = await this.get(); if(!h) throw new Error('Niciun folder ales.');
     const f = await h.getFileHandle(name, {create:true});
-    const w = await f.createWritable(); await w.write(text); await w.close();
+    const w = await f.createWritable();
+    try {
+      await w.write(text);
+      await w.close();
+    } catch(e) {
+      try { await w.abort(); } catch {}
+      throw e;
+    }
   },
   async citeste(name){
     const h = await this.get(); if(!h) return null;
@@ -70,7 +101,7 @@ export const folder = {
 };
 
 export const draft = {
-  save(state){ try{ localStorage.setItem(LS_DRAFT, JSON.stringify(state)); }catch{} },
+  save(state){ try{ localStorage.setItem(LS_DRAFT, JSON.stringify(state)); return true; }catch{ return false; } },
   load(){ try{ return JSON.parse(localStorage.getItem(LS_DRAFT)||'null'); }catch{ return null; } },
   clear(){ try{ localStorage.removeItem(LS_DRAFT); }catch{} }
 };

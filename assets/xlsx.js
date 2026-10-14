@@ -1,15 +1,17 @@
 // Citire/scriere .xlsx prin editare directa a XML-ului din pachet (JSZip).
 // Scopul: exportul pastreaza intact formatarea, formulele si setarile de tiparire ale machetei CAS.
-import { r3 } from './num.js?v=20260914-194323';
+import { r3 } from './num.js?v=20261014-115358';
 
 const COLS = ['E','F','G','H','I','J'];
 const KEYS = ['e','f','g','h','i','j'];
 
-const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const esc = s => String(s)
+  .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-// Localizeaza <c r="REF" ...> fie self-closing, fie cu continut.
+// Localizeaza <c ... r="REF" ...> fie self-closing, fie cu continut, indiferent de ordinea atributelor.
 function cellRe(ref){
-  return new RegExp('<c r="'+ref+'"([^>]*?)(\\/>|>([\\s\\S]*?)<\\/c>)');
+  return new RegExp('<c\\b([^>]*?\\br="'+ref+'"[^>]*?)(\\/>|>([\\s\\S]*?)<\\/c>)');
 }
 
 function hasFormula(xml, ref){
@@ -20,16 +22,16 @@ function hasFormula(xml, ref){
 function setValue(xml, ref, num){
   const m = xml.match(cellRe(ref));
   if(!m) return xml;
-  const attrs = m[1].replace(/\st="[^"]*"/,'');
-  const repl = '<c r="'+ref+'"'+attrs+'><v>'+num+'</v></c>';
+  const attrs = m[1].replace(/\st="[^"]*"/g,'').replace(/\br="[^"]*"/g,'').trim();
+  const repl = '<c r="'+ref+'"'+(attrs?' '+attrs:'')+'><v>'+num+'</v></c>';
   return xml.slice(0,m.index)+repl+xml.slice(m.index+m[0].length);
 }
 
 function setText(xml, ref, text){
   const m = xml.match(cellRe(ref));
   if(!m) return xml;
-  const attrs = m[1].replace(/\st="[^"]*"/,'');
-  const repl = '<c r="'+ref+'"'+attrs+' t="inlineStr"><is><t xml:space="preserve">'+esc(text)+'</t></is></c>';
+  const attrs = m[1].replace(/\st="[^"]*"/g,'').replace(/\br="[^"]*"/g,'').trim();
+  const repl = '<c r="'+ref+'"'+(attrs?' '+attrs:'')+' t="inlineStr"><is><t xml:space="preserve">'+esc(text)+'</t></is></c>';
   return xml.slice(0,m.index)+repl+xml.slice(m.index+m[0].length);
 }
 
@@ -96,7 +98,7 @@ export async function buildXlsx(templateBuf, values, meta){
 }
 
 /** Citeste valorile E..J de pe randurile 8..128 dintr-o macheta existenta. */
-async function readCellText(buf, xml, ref){
+function readCellText(xml, ref, shared){
   const m = xml.match(cellRe(ref));
   if(!m || m[2]==='/>') return '';
   const body = m[3]||'';
@@ -105,15 +107,14 @@ async function readCellText(buf, xml, ref){
   const v = body.match(/<v>([^<]*)<\/v>/);
   if(!v) return '';
   if(/t="s"/.test(m[1])){
-    const zip = await JSZip.loadAsync(buf.slice(0));
-    const ss = await sharedStrings(zip);
-    return ss[parseInt(v[1],10)]||'';
+    return (shared && shared[parseInt(v[1],10)]) || '';
   }
   return v[1];
 }
 
 export async function readMacheta(buf){
-  const { xml } = await sheetOf(buf);
+  const { zip, xml } = await sheetOf(buf);
+  const ss = await sharedStrings(zip);
   const out = {};
   for(let r=8;r<=128;r++){
     const v={};
@@ -124,7 +125,7 @@ export async function readMacheta(buf){
   // valorile statice din fisier, cu null pentru celulele cu formula (folosite la verificarea consecventei)
   const statice = {};
   for(let r=8;r<=128;r++){ const v={}; COLS.forEach((c,i)=>{ v[KEYS[i]] = getNumber(xml,c+r); }); statice[r]=v; }
-  return { values: out, statice, luna: await readCellText(buf, xml, 'B4'), unitate: await readCellText(buf, xml, 'A1') };
+  return { values: out, statice, luna: readCellText(xml, 'B4', ss), unitate: readCellText(xml, 'A1', ss) };
 }
 
 /** Citeste fisa BC39 (xlsx): intoarce {bugetar, angajament, coloane:[...]} in lei. */
@@ -135,6 +136,7 @@ export async function readBC39(buf){
         .map(m=>m[1].replace(/<[^>]+>/g,''))
     : [];
   const name = Object.keys(zip.files).find(n=>/^xl\/worksheets\/sheet\d+\.xml$/.test(n));
+  if(!name) throw new Error('Fișierul nu conține o foaie de calcul validă.');
   const xml = await zip.file(name).async('string');
   const rows = {};
   for(const rm of xml.matchAll(/<row r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g)){
@@ -147,7 +149,9 @@ export async function readBC39(buf){
     }
     rows[rm[1]] = cells;
   }
-  const head = rows['1']||{};
+  const rowKeys = Object.keys(rows).sort((a,b)=>+a - +b);
+  const headKey = rowKeys.find(rn => Object.values(rows[rn]||{}).some(v => /tip credit/i.test(String(v)))) || rowKeys[0] || '1';
+  const head = rows[headKey]||{};
   const cols = Object.keys(head).sort();
   const tipCol = cols.find(c=>/tip credit/i.test(String(head[c]))) || 'E';
   const valCols = cols.filter(c=>c>tipCol);
@@ -159,7 +163,7 @@ export async function readBC39(buf){
   const ac = cols.find(c=>/^an$/i.test(String(head[c])));
   const dc = cols.find(c=>/denumire/i.test(String(head[c])));
   for(const rn of Object.keys(rows)){
-    if(rn==='1') continue;
+    if(rn===headKey || +rn < +headKey) continue;
     const rw = rows[rn];
     const tip = String(rw[tipCol]||'').toLowerCase();
     const val = parseFloat(rw[refCol]);
