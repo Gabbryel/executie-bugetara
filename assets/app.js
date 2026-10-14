@@ -1,74 +1,45 @@
-import { ROWS } from './rows.js?v=20261014-120834';
-import { parseNum, r3, fmt, fmtLei } from './num.js?v=20261014-120834';
-import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20261014-120834';
-import * as store from './store.js?v=20261014-120834';
+import { ROWS } from './rows.js?v=20261014-132140';
+import { parseNum, r3, fmt, fmtLei } from './num.js?v=20261014-132140';
+import { loadTemplate, buildXlsx, readMacheta, readBC39 } from './xlsx.js?v=20261014-132140';
+import * as store from './store.js?v=20261014-132140';
+import { KEYS, LUNI, LEAVES, blank, dinGol, aggregate, recompute as calculeaza, dinDinCumulat, lunaDinText, anDinText,
+  lunaAnDinEticheta, numeLunaAn, lunaUrmatoare, bazaInceputAn, starePrecedenta, precedentaAsteptata, col7Inconsecvent,
+  faraCumulat as faraCumulatIn, aceleasiFrunze, repartizeazaCol4, curataStare } from './calc.js?v=20261014-132140';
 
-const KEYS = ['e','f','g','h','i','j'];
-const lunaDinText = t => { const i = LUNI.findIndex(l=>new RegExp(l,'i').test(String(t||''))); return i<0?null:i+1; };
-const anDinText = t => { const m = String(t||'').match(/(20\d\d)/); return m?+m[1]:null; };
-const LUNI = ['ianuarie','februarie','martie','aprilie','mai','iunie','iulie','august','septembrie','octombrie','noiembrie','decembrie'];
 const byRow = Object.fromEntries(ROWS.map(r=>[r.r, r]));
 const cuvCheie = t => String(t||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
   .replace(/[^A-Z0-9 ]/g,' ').split(/\s+/).filter(w=>w && !['SC','SRL','SA','S','C'].includes(w));
 const aceeasiUnitate = (a,b) => { const A=cuvCheie(a), B=cuvCheie(b); return A.length && B.length && (A.every(w=>B.includes(w)) || B.every(w=>A.includes(w))); };
-const LEAVES = ROWS.filter(r=>!r.ch).map(r=>r.r);
+// cautarea ignora diacriticele si majusculele si gaseste si dupa cod (sub-capitol, titlu, alineat)
+const fold = s => String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+const CAUTA = Object.fromEntries(ROWS.map(r=>[r.r, fold([r.lbl, r.sub, r.tit, r.alin].join(' '))]));
 const $ = s => document.querySelector(s);
-const blank = () => Object.fromEntries(KEYS.map(k=>[k,0]));
 const escHtml = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const COL_NAMES = ['Credite bugetare aprobate (col. 3)', 'Credite de angajament (col. 4)', 'Credite trimestriale cumulate (col. 5)', 'Plăți nete de casă cumulat (col. 6)', 'Luna curentă (col. 7)', 'Cheltuieli efective (col. 8)'];
 
 let TPL = null;            // {buf, check}
 let state = newState();
-let prev = null;           // {label, leaves}
+let prev = null;           // {label, leaves, an, luna, totals} — luna 0 = inceput de an (ianuarie porneste de la zero)
 let bc39ref = null;        // {bugetar, angajament, sursa, coloane, luna, an, denumire, detalii}
 let importNote = null;     // {title, det} — inconsecvente gasite in ultima macheta importata
+let cheieDeschisa = null;  // luna din arhiva (AAAA-LL) din care provine formularul; salvarea peste alta luna existenta intreaba
 
 function newState(){
   const d = new Date();
   const leaves = {}; const din = {};
-  LEAVES.forEach(r=>{ leaves[r]=blank(); din[r]={i:0,dj:null,f:null}; });   // f:null = col. 4 urmeaza col. 3; dj:null = Δ col. 8 urmeaza col. 7
+  LEAVES.forEach(r=>{ leaves[r]=blank(); din[r]=dinGol(); });
   return {
     meta:{ an:d.getFullYear(), luna:d.getMonth()+1, unitate:'SC SPINAL CARE DOBRECI SRL' },
     mode:'cumulat', linkEG:true, leaves, din, prevLabel:null
   };
 }
 
-/* ---------- calcul ---------- */
-function recompute(){
-  if(state.mode==='delta'){
-    LEAVES.forEach(r=>{
-      const p = prev && prev.leaves[r] ? prev.leaves[r] : blank();
-      const d = state.din[r] || {i:0,dj:null,f:null};
-      const L = state.leaves[r];
-      L.i = r3(d.i);
-      L.h = r3((p.h||0) + d.i);
-      // col. 8 (cheltuieli efective): cheltuiala lunii = plata lunii (col. 7) pana cand utilizatorul tasteaza Δ pe rand;
-      // in machetele reale col. 8 = col. 6 pe majoritatea randurilor, diferentele sunt facturi inregistrate si neplatite
-      L.j = r3((p.j||0) + (d.dj==null ? d.i : d.dj));
-      if(state.linkEG){ L.e = L.h; L.g = L.h; }
-      // col. 4 (credite de angajament) se reface lunar din col. 3, cu cateva randuri rotunjite in sus:
-      // urmeaza col. 3 pana cand utilizatorul tasteaza o valoare pe rand (din.f != null)
-      L.f = d.f==null ? L.e : r3(d.f);
-    });
-  } else if(state.linkEG){
-    LEAVES.forEach(r=>{ const L = state.leaves[r]; L.e = L.h; L.g = L.h; });
-  }
-  return aggregate(state.leaves);
-}
-
-/** Agregare bottom-up: fiecare rand de sinteza = suma copiilor sai. */
-export function aggregate(leaves){
-  const vals = {};
-  LEAVES.forEach(r=>{ vals[r] = {...blank(), ...(leaves[r]||{})}; });
-  [...ROWS].sort((a,b)=>b.r-a.r).forEach(row=>{
-    if(!row.ch) return;
-    const acc = blank();
-    row.ch.forEach(c=>{ const v = vals[c]; if(v) KEYS.forEach(k=>{ acc[k] += (v[k]||0); }); });
-    KEYS.forEach(k=>{ acc[k]=r3(acc[k]); });
-    vals[row.r]=acc;
-  });
-  return vals;
-}
+/* ---------- calcul (logica e in calc.js) ---------- */
+const recompute = () => calculeaza(state, prev);
+/** Formularul nu are inca date cumulate (col. 3/6/8 goale pe toate randurile)? */
+const faraCumulat = () => faraCumulatIn(state.leaves);
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const TEXT_DELTA = 'Col. 4 urmează col. 3 și Δ col. 8 urmează col. 7 — tastezi doar rândurile care diferă.';
 
 /* ---------- tabel ---------- */
 function buildTable(){
@@ -119,6 +90,7 @@ function buildTable(){
     inp.addEventListener('input', onInput);
     inp.addEventListener('blur', e=>{ e.target.value = fmt(readInput(e.target)); });
     inp.addEventListener('keydown', onKey);
+    inp.addEventListener('paste', onPaste);
   });
 }
 
@@ -131,14 +103,38 @@ function readInput(inp){
   if(celulaAuto(inp)) return k==='f' ? (state.leaves[r].f||0) : (state.din[r].i||0);
   return src.startsWith('din') ? (state.din[r][k]||0) : (state.leaves[r][k]||0);
 }
+/** Scrie textul tastat sau lipit in starea celulei. Col. 4 sau Δ golita revine la automat (urmeaza col. 3, respectiv col. 7). */
+function scrieCelula(inp, text){
+  const r = +inp.dataset.r, k = inp.dataset.k, src = inp.dataset.src;
+  if((src==='din.f' || src==='din.dj') && String(text).trim()===''){ state.din[r][k] = null; return; }
+  const v = r3(parseNum(text));
+  if(src.startsWith('din')) state.din[r][k] = v; else state.leaves[r][k] = v;
+}
 function onInput(e){
-  const inp = e.target, r = +inp.dataset.r, k = inp.dataset.k;
-  // col. 4 sau Δ golita revine la automat (urmeaza col. 3, respectiv col. 7)
-  if((inp.dataset.src==='din.f' || inp.dataset.src==='din.dj') && inp.value.trim()===''){ state.din[r][k] = null; render(); scheduleSave(); return; }
-  const v = r3(parseNum(inp.value));
-  if(inp.dataset.src.startsWith('din')) state.din[r][k] = v; else state.leaves[r][k] = v;
+  scrieCelula(e.target, e.target.value);
   render();
   scheduleSave();
+}
+/** Lipire din Excel a mai multor celule: randul k al textului merge pe randul machetei de dedesubt (r + k),
+ *  coloana j pe coloana de valori din dreapta; randurile de total si celulele calculate se sar. */
+function onPaste(e){
+  const text = (e.clipboardData && e.clipboardData.getData('text')) || '';
+  if(!/[\t\n\r]/.test(text.replace(/[\r\n]+$/,''))) return;     // o singura valoare: lipirea obisnuita
+  e.preventDefault();
+  const linii = text.replace(/\r/g,'').replace(/\n+$/,'').split('\n').map(l=>l.split('\t'));
+  const r0 = +e.target.dataset.r, c0 = +e.target.dataset.col;
+  let n = 0, ultim = r0, sarite = 0;
+  linii.forEach((celule, di)=>{
+    const r = r0 + di; if(!byRow[r]) return;
+    celule.forEach((t, dj)=>{
+      const inp = $(`#tbl input[data-r="${r}"][data-col="${c0+dj}"]`);
+      if(!inp){ if(String(t).trim()!=='') sarite++; return; }
+      scrieCelula(inp, t); n++; ultim = r;
+    });
+  });
+  render(); scheduleSave();
+  e.target.value = fmt(readInput(e.target));        // render() nu rescrie celula in care e cursorul
+  toast(`Am lipit ${n} ${n===1?'valoare':'valori'} pe rândurile ${r0}–${ultim}.` + (sarite ? ` ${sarite} ${sarite===1?'valoare a căzut':'valori au căzut'} pe rânduri de total sau celule calculate și nu s-au scris.` : ''));
 }
 function onKey(e){
   const move = e.key==='ArrowDown'||e.key==='Enter' ? 1 : e.key==='ArrowUp' ? -1 : 0;
@@ -174,7 +170,9 @@ function renderTinta(vals){
     const k = th.dataset.tinta, tinta = t[k];
     if(tinta==null){ th.innerHTML = '<span class="muted">—</span>'; th.className='num'; return; }
     const d = Math.round(tinta*1000) - Math.round(vals[8][k]*1000);
-    th.innerHTML = `<b>${fmt(tinta)}</b><small>${d===0 ? '✓ atins' : d>0 ? 'rămân '+fmt(d/1000) : 'în plus '+fmt(-d/1000)}</small>`;
+    // col. 4 sub tinta: diferenta se acopera rotunjind in sus cateva randuri, ca la contabil — un clic
+    const rep = k==='f' && d>0 ? ` <button type="button" class="lnk" data-act="repartizeaza" title="Rotunjește în sus la mii întregi câteva rânduri din col. 4, ca să atingă ținta">repartizează</button>` : '';
+    th.innerHTML = `<b>${fmt(tinta)}</b><small>${d===0 ? '✓ atins' : d>0 ? 'rămân '+fmt(d/1000) : 'în plus '+fmt(-d/1000)}${rep}</small>`;
     th.className = 'num ' + (d===0 ? 'good' : 'bad');
   });
 }
@@ -216,15 +214,15 @@ function render(){
     inp.classList.toggle('auto', auto);
     inp.title = auto ? TITLU_AUTO[inp.dataset.k] : '';
   });
-  const q = ($('#filtru').value||'').trim().toLowerCase();
+  const q = fold(($('#filtru').value||'').trim());
   const hz = $('#hideZero').checked;
   document.querySelectorAll('#tbl tbody tr').forEach(tr=>{
     const rn = +tr.dataset.row, row = byRow[rn], v = vals[rn] || blank();
     const gol = KEYS.every(k=>Math.abs(v[k])<1e-9);
     tr.classList.toggle('zero', gol);
     // randurile de sinteza raman vizibile ca reper, cu exceptia celor complet goale cand se ascund zerourile
-    const potrivit = !q || row.lbl.toLowerCase().includes(q) || String(rn)===q;
-    let vizibil = row.ch ? (!q || potrivit || true) : potrivit;
+    const potrivit = !q || CAUTA[rn].includes(q) || String(rn)===q;
+    let vizibil = row.ch ? true : potrivit;
     if(hz && gol && document.activeElement?.dataset?.r !== String(rn)) vizibil = false;
     tr.hidden = !vizibil;
   });
@@ -245,6 +243,20 @@ function runChecks(vals){
   const near = (a,b,eps=0.0005)=>Math.abs(a-b)<=eps;
   const nr = (n) => n===1 ? '1 rând' : n+' rânduri';
 
+  // 8. luna precedenta = luna dinainte; in ianuarie cumulatele pornesc de la zero, deci decembrie nu se aduna.
+  // Prima in lista: o luna precedenta gresita strica toate cumulatele, deci e cauza celorlalte diferente.
+  if(prev){
+    const st = starePrecedenta(state.meta, prev);
+    const a = precedentaAsteptata(state.meta.an, state.meta.luna);
+    const asteptata = numeLunaAn(a.an, a.luna), form = numeLunaAn(state.meta.an, state.meta.luna);
+    if(st==='ok') out.push(chk(true,'Luna precedentă', `${prev.label} este baza pentru ${form}.`, false, 'luna precedentă: '+prev.label));
+    else if(st==='ianuarie') out.push({ ...chk(false,'Luna precedentă',
+      `Formularul este pe ${form}: în ianuarie cumulatele pornesc de la zero, dar luna precedentă încărcată este ${prev.label} și s-ar aduna. Apasă „Pornește de la zero".`), act:'zero' });
+    else if(st==='alta') out.push(chk(false,'Luna precedentă',
+      `Luna precedentă este ${prev.label}, dar formularul este pe ${form}: cumulatele trebuie să pornească de la ${asteptata}. Încarcă ${asteptata} ca lună precedentă (meniul ⋯ → Luni salvate) sau schimbă luna formularului.`));
+    else out.push(chk(null,'Luna precedentă', `Nu știu ce lună este „${prev.label}". Verifică să fie ${asteptata}.`));
+  }
+
   // 1. corelatie BC39
   if(bc39ref && (bc39ref.bugetar!=null || bc39ref.angajament!=null)){
     const db = bc39ref.bugetar!=null ? Math.round(t.e*1000)-Math.round(bc39ref.bugetar) : 0;
@@ -252,11 +264,11 @@ function runChecks(vals){
     const lunaBc = bc39ref.lunaNr ? `${LUNI[bc39ref.lunaNr-1]} ${bc39ref.an||''}`.trim() : null;
     const lunaForm = `${LUNI[state.meta.luna-1]} ${state.meta.an}`;
     const altaLuna = bc39AltaLuna();
-    const peste = (ref) => (prev && ref!=null) ? ` — cu ${fmt(ref/1000 - prev.totals.h)} peste ${prev.label}` : '';
+    const peste = (ref) => (prev && prev.luna!==0 && ref!=null) ? ` — cu ${fmt(ref/1000 - prev.totals.h)} peste ${prev.label}` : '';
     const tinta = (col, cur, ref, d, extra, sfat) => ref==null ? '' :
       `${col} este ${fmt(cur)}, trebuie ${fmt(ref/1000)} (${fmtLei(ref)} lei${extra||''})` + (d===0 ? ' ✓' : (d<0 ? ` — lipsesc ${fmt(-d/1000)}` : ` — în plus ${fmt(d/1000)}`) + (sfat||''));
     // in delta, col. 4 porneste de la col. 3: diferenta fata de BC39 se acopera rotunjind cateva randuri
-    const sfat4 = state.mode==='delta' ? ': col. 4 urmează col. 3, tastează în col. 4 pe rândurile de rotunjit' : '';
+    const sfat4 = state.mode==='delta' ? ': col. 4 urmează col. 3; apasă „repartizează" în rândul țintă sau tastează în col. 4 pe rândurile de rotunjit' : '';
     if(altaLuna){
       out.push(chk(false,'Corelația cu fișa BC39',
         `Fișa BC39 este pentru ${lunaBc}, dar formularul este pe ${lunaForm}. Schimbă luna formularului sau importă fișa BC39 a lunii corecte.`));
@@ -298,6 +310,19 @@ function runChecks(vals){
       false, 'cumulat ≥ '+prev.label));
   }
 
+  // 9. in cumulat: col. 7 = col. 6 − col. 6 din luna precedenta (in ianuarie, fata de zero).
+  // Verificat pe machetele reale iunie → iulie → august: se potriveste exact pe toate randurile.
+  if(state.mode==='cumulat' && (prev || state.meta.luna===1) && !faraCumulat()){
+    const bad = col7Inconsecvent(state.leaves, prev ? prev.leaves : null);
+    const fata = prev ? prev.label : 'începutul anului';
+    out.push(chk(bad.length===0, 'Luna curentă (col. 7) = cumulat − luna precedentă',
+      bad.length===0 ? `Pe toate rândurile col. 7 = col. 6 − col. 6 din ${fata}.`
+        : `${nr(bad.length)}: col. 7 nu este col. 6 minus ${fata}: ` +
+          bad.slice(0,8).map(r=>{ const p = prev ? (prev.leaves[r]||blank()).h : 0; return `r.${r} (col. 6 − ${fata} = ${fmt(r3(vals[r].h - p))}, col. 7 = ${fmt(vals[r].i)})`; }).join(', ') +
+          (bad.length>8?'…':'') + '. Corectează col. 7 sau col. 6 pe aceste rânduri.',
+      false, 'col. 7 = Δ col. 6'));
+  }
+
   // 4. col.6 <= col.4
   const over = LEAVES.filter(r=>(vals[r].h - vals[r].f) > 0.0005);
   // in aprilie 2026 macheta reala avea r.52 cu plati peste angajament, deci e avertisment, nu eroare
@@ -309,7 +334,7 @@ function runChecks(vals){
   // 5. col.8 >= col.6
   const neg = LEAVES.filter(r=>(vals[r].j - vals[r].h) < -0.0005);
   const gap = r3(t.j - t.h);
-  const reper = prev ? ` În ${prev.label} col. 8 depășea col. 6 cu ${fmt(r3(prev.totals.j - prev.totals.h))}.` : '';
+  const reper = prev && prev.luna!==0 ? ` În ${prev.label} col. 8 depășea col. 6 cu ${fmt(r3(prev.totals.j - prev.totals.h))}.` : '';
   const deltaAuto = state.mode==='delta' && LEAVES.every(r=>(state.din[r]||{}).dj==null);
   if(state.mode==='cumulat' && Math.abs(t.j)<1e-9 && Math.abs(t.h)>1e-9){
     out.push(chk(false,'Cheltuieli efective (col. 8) necompletate','Col. 8 este goală. Completează cheltuielile efective cumulate pe rânduri.' + reper, true));
@@ -317,7 +342,7 @@ function runChecks(vals){
     // nicio Δ tastata: col. 8 = luna precedenta + col. 7 pe toate randurile; decalajul fata de plati ramane cel din luna precedenta
     const cuFacturi = LEAVES.filter(r=>{ const p=prev.leaves[r]||blank(); return (p.j - p.h) > 0.0005; });
     out.push(chk(null,'Cheltuieli efective (col. 8)',
-      `Urmează plățile lunii (col. 7) pe toate rândurile: col. 8 = ${fmt(t.j)}, cu ${fmt(gap)} peste plăți, ca în ${prev.label}. ` +
+      `Urmează plățile lunii (col. 7) pe toate rândurile: col. 8 = ${fmt(t.j)}` + (prev.luna!==0 ? `, cu ${fmt(gap)} peste plăți, ca în ${prev.label}. ` : ', egal cu plățile. ') +
       `Dacă în ${LUNI[state.meta.luna-1]} s-au înregistrat facturi neplătite sau s-au plătit facturi mai vechi, tastează în coloana Δ cheltuiala lunii pe acele rânduri.` +
       (cuFacturi.length ? ` În ${prev.label} aveau facturi neplătite rândurile ${cuFacturi.join(', ')}.` : '')));
   } else {
@@ -350,7 +375,8 @@ function runChecks(vals){
   const g = guidance(vals, out);
   const gd = $('#guide');
   gd.className = 'guide noprint '+g.cls;   // noprint trebuie pastrat: linia nu apare in PDF
-  gd.innerHTML = `<span class="ic"></span><span class="tx">${escHtml(g.text)}</span>` + (g.more ? `<button class="lnk" id="guideMore">Toate verificările</button>` : '') + (g.reload ? `<button class="btn pri" id="guideReload">Reîncarcă aplicația</button>` : '');
+  gd.innerHTML = `<span class="ic"></span><span class="tx">${escHtml(g.text)}</span>` + (g.act ? `<button class="btn pri" id="guideAct" data-act="${g.act}">${ACTIUNI[g.act]}</button>` : '') +
+    (g.more ? `<button class="lnk" id="guideMore">Toate verificările</button>` : '') + (g.reload ? `<button class="btn pri" id="guideReload">Reîncarcă aplicația</button>` : '');
   const badge = $('#chkBadge');
   badge.textContent = errs ? String(errs) : '✓';
   badge.className = errs ? 'err' : 'ok';
@@ -363,6 +389,7 @@ function chk(ok, title, det, warnIfFail, scurt){
   const ic  = ok===null ? '?' : ok ? '✓' : '!';
   return { cls, ic, title, det, scurt };
 }
+const ACTIUNI = { zero:'Pornește de la zero' };
 const chkHtml = c => `<div class="chk ${c.cls}"><span class="ic">${c.ic}</span><span><b>${escHtml(c.title)}</b><span class="det">${escHtml(c.det)}</span></span></div>`;
 
 /* ---------- ghidare: o singura linie care spune ce urmeaza ---------- */
@@ -371,9 +398,11 @@ function guidance(vals, checks){
   const gol = KEYS.every(k=>Math.abs(t[k])<1e-9);
   if(versiuneNoua) return { cls:'warn', text:`Este publicată o versiune nouă a aplicației (${versiuneNoua}); rulezi ${VERSIUNE}. Ciorna se păstrează.`, reload:true };
   if(TPL && !TPL.check.ok) return { cls:'err', text:'Șablonul este defect: '+TPL.check.reason+'. Exportul ar produce o machetă greșită.' };
+  if(state.meta.luna===1 && !prev && state.mode==='cumulat' && faraCumulat())
+    return { cls:'info', act:'zero', text:`Ianuarie ${state.meta.an}: cumulatele pornesc de la zero, nu de la decembrie. Apasă „Pornește de la zero" și completează doar plățile lunii (col. 7), ca în celelalte luni.` };
   if(gol && !prev && !bc39ref) return { cls:'info', text:'Începe prin a importa luna precedentă sau macheta lunii curente din meniul ⋯, apoi fișa BC39 pentru verificare. Sau completează direct rândurile.' };
   const err = checks.find(c=>c.cls==='err');
-  if(err) return { cls:'err', text:err.title+': '+err.det, more:true };
+  if(err) return { cls:'err', text:err.title+': '+err.det, more:true, act:err.act };
   if(prev && state.mode==='cumulat' && gol) return { cls:'info', text:'Luna precedentă ('+prev.label+') e încărcată. Treci pe modul „delta" și completează doar plățile lunii (col. 7) și cheltuielile efective.' };
   if(!bc39ref) return { cls:'info', text:`Rândul 8: Bugetar ${fmtLei(t.e*1000)} lei, Angajament ${fmtLei(t.f*1000)} lei. Importă fișa BC39 din meniul ⋯ ca să verific corelația automat.` };
   const warn = checks.find(c=>c.cls==='warn' && c.ic==='!');
@@ -394,17 +423,20 @@ function snapshot(withPrev){
     bc39:{ bugetar:Math.round(totals.e*1000), angajament:Math.round(totals.f*1000) },
     leaves:state.leaves, din:state.din,
     bc39ref: bc39ref || undefined,
-    prev: (withPrev && prev) ? { label:prev.label, leaves:prev.leaves } : undefined
+    prev: (withPrev && prev) ? { label:prev.label, an:prev.an, luna:prev.luna, leaves:prev.leaves } : undefined
   };
 }
 function restore(data){
-  if(!data||!data.leaves) throw new Error('Fișier de stare invalid.');
+  if(!data||typeof data!=='object'||!data.leaves||typeof data.leaves!=='object') throw new Error('Fișier de stare invalid.');
   state = newState();
   Object.assign(state.meta, data.meta||{});
-  state.mode = data.mode||'cumulat'; state.linkEG = data.linkEG!==false; state.prevLabel = data.prevLabel||null;
+  state.mode = data.mode||'cumulat'; state.linkEG = data.linkEG!==false;
   LEAVES.forEach(r=>{ if(data.leaves[r]) Object.assign(state.leaves[r], data.leaves[r]);
                       if(data.din&&data.din[r]) Object.assign(state.din[r], data.din[r]); });
-  if(data.prev && data.prev.leaves) setPrev(data.prev.leaves, data.prev.label||'lună precedentă');
+  curataStare(state);                          // un fisier deteriorat nu trebuie sa blocheze aplicatia
+  // luna precedenta vine doar din fisier: cea incarcata inainte apartine altei luni
+  clearPrev();
+  if(data.prev && data.prev.leaves) setPrev(data.prev.leaves, data.prev.label||'lună precedentă', data.prev.an, data.prev.luna);
   // versiunea 1 copia col. 4 din luna precedenta; acum col. 4 urmeaza col. 3 pana e tastata (din.f = null)
   if(!(data.versiune>=2) && state.mode==='delta' && prev){
     LEAVES.forEach(r=>{ const d=state.din[r], pf=(prev.leaves[r]||blank()).f||0; if(!d.f || Math.abs(d.f-pf)<1e-9) d.f=null; });
@@ -416,39 +448,79 @@ function restore(data){
   if(data.bc39ref && (data.bc39ref.bugetar!=null || data.bc39ref.angajament!=null)) setBc39(data.bc39ref);
   else { bc39ref = null; $('#bcRef').textContent=''; }
   importNote = null;
+  cheieDeschisa = null;
   // Modul delta se sprijina pe luna precedenta: fara ea, valorile cumulate ar fi recalculate gresit.
+  let nota = null;
   if(state.mode==='delta' && !prev){
     state.mode='cumulat';
-    toast('Luna precedentă lipsește din fișier — am trecut pe modul „cumulat", valorile rămân neschimbate.', true);
+    nota = 'Luna precedentă lipsește din fișier — am trecut pe modul „cumulat", valorile rămân neschimbate.';
   }
   syncMetaInputs(); buildTable(); render(); scheduleSave();
   if(prev && state.mode==='cumulat' && faraCumulat()) treciPeDelta(true);
+  return nota;
 }
-/** Formularul nu are inca date cumulate (col. 3/6/8 goale pe toate randurile)? */
-const faraCumulat = () => LEAVES.every(r=>{ const L=state.leaves[r]; return Math.abs(L.h)<1e-9 && Math.abs(L.j)<1e-9 && Math.abs(L.e)<1e-9; });
-/** Trece pe modul delta fata de luna precedenta, pastrand ce a fost tastat in modul cumulat (col. 7, col. 4, col. 8). */
+/** Restaureaza si anunta: avertismentul din restore() are prioritate fata de mesajul obisnuit. */
+function deschide(data, mesaj){ const nota = restore(data); toast(nota || mesaj, !!nota); }
+/** Trece pe modul delta fata de luna precedenta. Valorile din tabel sunt sursa (calc.dinDinCumulat): ce s-a tastat sau
+ *  corectat in cumulat se pastreaza, iar celulele egale cu valoarea automata raman automate. */
 function treciPeDelta(anunta){
   if(!prev) return;
-  state.mode = 'delta';
-  LEAVES.forEach(r=>{
-    const p = prev.leaves[r]||blank(), L = state.leaves[r], d = state.din[r];
-    if(!d.i && L.i) d.i = L.i;                                   // platile lunii tastate in col. 7
-    if(!d.f) d.f = (L.f && Math.abs(L.f-L.e)>1e-9) ? L.f : null;   // col. 4 tastata diferit de col. 3 se pastreaza; altfel urmeaza col. 3
-    if(d.dj==null && L.j) d.dj = r3(L.j - (p.j||0));              // cheltuieli efective tastate cumulat; altfel Δ urmeaza col. 7
-  });
+  const inc = dinDinCumulat(state, prev);
   syncMetaInputs(); buildTable(); render(); scheduleSave();
-  if(anunta) toast(`Mod „delta" față de ${prev.label}: completezi plățile lunii (col. 7) și delta cheltuielilor efective; cumulatele pornesc de la ${prev.label}. Col. 4 urmează col. 3 și Δ col. 8 urmează col. 7 — tastezi doar rândurile care diferă.`);
+  if(inc.length) toast(`Mod „delta" față de ${prev.label}. Pe ${inc.length===1?'rândul':'rândurile'} ${inc.slice(0,10).join(', ')}${inc.length>10?'…':''} col. 6 nu era ${prev.label} + col. 7: am păstrat col. 7 și am recalculat col. 6.`, true);
+  else if(anunta) toast(`Mod „delta" față de ${prev.label}: completezi plățile lunii (col. 7) și delta cheltuielilor efective; cumulatele pornesc de la ${prev.label}. ${TEXT_DELTA}`);
 }
-/** Dupa incarcarea lunii precedente: daca luna curenta nu are inca date cumulate, treci automat pe delta. */
-function dupaPrev(){ if(state.mode==='cumulat' && faraCumulat()) setTimeout(()=>treciPeDelta(true), 50); }
-function setPrev(leaves, label){
-  const L = {}; LEAVES.forEach(r=>{ L[r] = {...blank(), ...(leaves[r]||{})}; });
-  prev = { leaves:L, label, totals: aggregate(L)[8] };
-  state.prevLabel = label;
-  $('#prevInfo').textContent = 'Lună precedentă: ' + label;
-  $('#prevHdr').textContent = 'față de ' + label; $('#prevHdr').hidden = false;
+/**
+ * Incarca luna precedenta (an/luna pot lipsi; se deduc din eticheta).
+ * Pe un formular gol, fara luna fixata de BC39, formularul trece pe luna de dupa cea precedenta.
+ * In ianuarie, o luna din anul trecut nu se aduna: baza devine „inceput de an" (cumulatele pornesc de la zero).
+ * Daca formularul nu are inca date cumulate, trece pe delta.
+ */
+function incarcaPrev(leaves, an, luna, eticheta){
+  if(an==null || luna==null){ const la = lunaAnDinEticheta(eticheta); if(la){ an = la.an; luna = la.luna; } }
+  const note = [];
+  if(an && luna && faraCumulat() && !(bc39ref && bc39ref.lunaNr)){
+    const u = lunaUrmatoare(+an, +luna);
+    if(u.an!==state.meta.an || u.luna!==state.meta.luna){
+      state.meta.an = u.an; state.meta.luna = u.luna; syncMetaInputs(); amprentaSalvata = null;
+      note.push(`formularul a trecut pe ${numeLunaAn(u.an, u.luna)}`);
+    }
+  }
+  let msg;
+  if(state.meta.luna===1 && an && +an < state.meta.an){
+    const z = bazaInceputAn(state.meta.an);
+    setPrev(z.leaves, z.label, z.an, 0);
+    msg = `Ianuarie ${state.meta.an}: cumulatele pornesc de la zero, deci ${numeLunaAn(+an, +luna)} nu se adună` + (note.length ? ` (${note.join('; ')})` : '') + '. Completezi plățile lunii (col. 7); col. 3, 5, 6 și 8 ies egale cu luna.';
+  } else {
+    setPrev(leaves, eticheta, an, luna);
+    msg = 'Lună precedentă: ' + prev.label + (note.length ? ` — ${note.join('; ')}` : '') + '.';
+  }
+  scheduleSave();
+  if(state.mode==='cumulat' && faraCumulat()){ treciPeDelta(false); msg += (prev.luna===0 ? ' ' : ' Mod „delta": completezi plățile lunii (col. 7). ') + TEXT_DELTA; }
+  toast(msg);
+}
+/** Ianuarie: baza „inceput de an" (zero) in locul lunii precedente; in delta cumulatele devin chiar valorile lunii. */
+function pornesteDeLaZero(){
+  const z = bazaInceputAn(state.meta.an);
+  setPrev(z.leaves, z.label, z.an, 0);
+  if(state.mode==='cumulat' && faraCumulat()) treciPeDelta(false); else render();
+  scheduleSave(); marcheazaModificari();
+  toast(`Ianuarie ${state.meta.an}: cumulatele pornesc de la zero. Completezi plățile lunii (col. 7); col. 3, 5, 6 și 8 ies egale cu luna. ${TEXT_DELTA}`);
+}
+function setPrev(leaves, label, an, luna){
+  const L = {}; LEAVES.forEach(r=>{ L[r] = blank(); KEYS.forEach(k=>{ const v = (leaves[r]||{})[k]; L[r][k] = typeof v==='number' ? (isFinite(v)?v:0) : parseNum(v); }); });
+  const la = (an!=null && luna!=null && isFinite(+an) && isFinite(+luna)) ? { an:+an, luna:+luna } : lunaAnDinEticheta(label);
+  prev = { leaves:L, an: la ? la.an : null, luna: la ? la.luna : null, label: la ? numeLunaAn(la.an, la.luna) : (label||'lună precedentă'), totals: aggregate(L)[8] };
+  state.prevLabel = prev.label;
+  $('#prevInfo').textContent = 'Lună precedentă: ' + prev.label;
+  $('#prevHdr').textContent = 'față de ' + prev.label; $('#prevHdr').hidden = false;
   $('#modeDelta').disabled = false; $('#modeSeg').hidden = false;
   if($('#tbl').rows.length) render();
+}
+function clearPrev(){
+  prev = null; state.prevLabel = null;
+  $('#prevInfo').textContent = 'Nicio lună precedentă încărcată';
+  $('#prevHdr').hidden = true; $('#modeSeg').hidden = true; $('#modeDelta').disabled = true;
 }
 
 function setBc39(b){
@@ -493,7 +565,8 @@ async function scrieInFolder(name, content){
 /** La tiparire, titlul paginii devine numele fisierului: „Salvează ca PDF" il propune ca nume. Folderul il alege browserul (il tine minte pe ultimul). */
 function numePdf(){ return `Macheta Executie spital ${LUNI[state.meta.luna-1].toUpperCase()} ${state.meta.an}`; }
 function exportJson(){
-  const b = new Blob([JSON.stringify(snapshot(),null,2)],{type:'application/json'});
+  // cu luna precedenta: fara ea, fisierul redeschis ar pierde modul delta
+  const b = new Blob([JSON.stringify(snapshot(true),null,2)],{type:'application/json'});
   download(b, store.fileName(state.meta.an, state.meta.luna));
 }
 function download(blob, name){
@@ -506,10 +579,12 @@ async function onFile(input, target){
   input.value='';
   $('#mainMenu').removeAttribute('open');
   try{
+    // importul ca luna curenta inlocuieste formularul: intai intrebam de modificarile nesalvate
+    if(target==='cur' && !(await inainteDeInlocuire('imporți „'+f.name+'"'))) return;
     if(f.name.toLowerCase().endsWith('.json')){
       const data = JSON.parse(await f.text());
-      if(target==='prev'){ setPrev(data.leaves||{}, data.meta ? `${LUNI[(data.meta.luna||1)-1]} ${data.meta.an}` : f.name); dupaPrev(); }
-      else { restore(data); toast('Stare încărcată din JSON.'); }
+      if(target==='prev'){ if(!data || !data.leaves) throw new Error('Fișier de stare invalid.'); incarcaPrev(data.leaves, data.meta && data.meta.an, data.meta && data.meta.luna, f.name); }
+      else deschide(data, 'Stare încărcată din JSON.');
       return;
     }
     const buf = await f.arrayBuffer();
@@ -536,9 +611,16 @@ async function onFile(input, target){
     const dif = verificaConsecventa(m);
     importNote = dif.length ? { title:`Macheta importată (${eticheta}) are totaluri care nu corespund sumei rândurilor`,
       det: dif.slice(0,6).join(' · ') + (dif.length>6?` · încă ${dif.length-6}`:'') + '. Aplicația recalculează totalurile de jos în sus; verifică rândurile respective în fișierul sursă.' } : null;
-    if(target==='prev'){ setPrev(m.values, eticheta); scheduleSave(); toast('Lună precedentă încărcată: '+eticheta+(dif.length?' — are totaluri inconsecvente, vezi verificările':'')); dupaPrev(); }
+    if(target==='prev'){
+      incarcaPrev(m.values, la, lm, eticheta);
+      if(dif.length) toast('Luna precedentă are totaluri inconsecvente în fișier — vezi verificările.', true);
+    }
     else {
-      LEAVES.forEach(r=>{ if(m.values[r]) Object.assign(state.leaves[r], m.values[r]); });
+      // macheta inlocuieste luna: valorile vin toate din fisier, iar Δ-urile vechi nu mai corespund
+      const nou = newState();
+      LEAVES.forEach(r=>{ state.leaves[r] = { ...nou.leaves[r], ...(m.values[r]||{}) }; });
+      state.din = nou.din;
+      cheieDeschisa = null;
       if(LEAVES.some(r=>{ const v=state.leaves[r]; return Math.abs(v.e-v.h)>0.0005 || Math.abs(v.g-v.h)>0.0005; })){
         state.linkEG = false; toast('Macheta are col. 3 sau 5 diferite de col. 6 pe unele rânduri — am dezlegat coloanele.');
       }
@@ -553,7 +635,7 @@ async function onFile(input, target){
 /* ---------- salvarea lunii: arhiva din browser + GitHub daca e configurat ---------- */
 const cheiaLunii = () => `${state.meta.an}-${String(state.meta.luna).padStart(2,'0')}`;
 const numeLunii = k => { const [a,l]=k.split('-'); return `${LUNI[(+l||1)-1]} ${a}`; };
-const amprenta = () => JSON.stringify({ m:state.meta, mode:state.mode, l:state.linkEG, leaves:state.leaves, din:state.din, p:state.prevLabel });
+const amprenta = () => JSON.stringify({ m:state.meta, mode:state.mode, l:state.linkEG, leaves:state.leaves, din:state.din, p:state.prevLabel, pt:prev ? prev.totals : null });
 let amprentaSalvata = null;
 function marcheazaModificari(){
   const sal = store.luni.get(cheiaLunii());
@@ -561,12 +643,63 @@ function marcheazaModificari(){
   $('#btnSave').classList.toggle('dirty', dirty);
   $('#btnSave').title = dirty ? 'Modificări nesalvate — salvează luna (Ctrl/Cmd+S)' : 'Luna este salvată (' + new Date(sal.salvat||sal.generat).toLocaleString('ro-RO') + ')';
 }
+/** Ce s-a tastat in formular (o luna precedenta incarcata fara nimic tastat nu conteaza). */
+const areDateTastate = () => state.mode==='delta'
+  ? LEAVES.some(r=>{ const d=state.din[r]; return d.i || d.f!=null || d.dj!=null; })
+  : LEAVES.some(r=>KEYS.some(k=>Math.abs(state.leaves[r][k])>1e-9));
+const nesalvat = () => { const sal = store.luni.get(cheiaLunii()); return areDateTastate() && (!sal || amprentaSalvata !== amprenta()); };
+/** Inainte ca formularul sa fie inlocuit (alta luna, import, GitHub): modificarile nesalvate nu se pierd fara intrebare. */
+async function inainteDeInlocuire(ce){
+  if(!nesalvat()) return true;
+  const r = await intreaba(`Formularul pentru ${numeLunaAn(state.meta.an, state.meta.luna)} are modificări nesalvate. Înainte să ${ce}:`, [
+    { id:'save', text:'Salvează luna și continuă', pri:true }, { id:'skip', text:'Continuă fără să salvez' }, { id:'cancel', text:'Anulează' }]);
+  if(r==='save') return await salveazaLuna();
+  return r==='skip';
+}
+/** Intrebare cu butoane, in pagina (nu confirm() al browserului). Intoarce id-ul butonului apasat sau null (Escape). */
+function intreaba(text, butoane){
+  const dlg = $('#askDlg'), bar = $('#askBtns');
+  $('#askText').textContent = text;
+  bar.innerHTML = '';
+  return new Promise(res=>{
+    const gata = v => { dlg.removeEventListener('close', laEscape); if(dlg.open) dlg.close(); res(v); };
+    const laEscape = () => gata(null);
+    butoane.forEach(b=>{
+      const el = document.createElement('button');
+      el.type = 'button'; el.className = 'btn' + (b.pri ? ' pri' : ''); el.textContent = b.text;
+      el.addEventListener('click', ()=>gata(b.id));
+      bar.appendChild(el);
+    });
+    dlg.addEventListener('close', laEscape);
+    dlg.showModal();
+    (bar.querySelector('.pri') || bar.firstChild)?.focus();
+  });
+}
+/** Luna salvata: din folder (are prioritate, poate fi modificat si din alta parte), altfel din arhiva browserului. */
+async function citesteLuna(k){
+  let d = null;
+  if(await store.folder.get() && (await store.folder.permisiune(true))==='granted') d = await store.folder.citeste(k+'.json');
+  return d || store.luni.get(k);
+}
+/** Salveaza luna. Intoarce true daca s-a salvat (cel putin in browser). */
 async function salveazaLuna(){
   const k = cheiaLunii();
+  // peste o luna salvata din care formularul nu provine (ex. dupa schimbarea lunii din antet): intai intrebam
+  if(k !== cheieDeschisa){
+    const peDisc = (await store.folder.permisiune(false))==='granted' ? await store.folder.citeste(k+'.json') : null;
+    const exista = store.luni.get(k) || peDisc;
+    if(exista){
+      const cand = exista.salvat||exista.generat ? ` (salvată ${new Date(exista.salvat||exista.generat).toLocaleString('ro-RO')})` : '';
+      const r = await intreaba(`Există deja o versiune salvată pentru ${numeLunii(k)}${cand}, iar formularul nu a fost deschis din ea. O înlocuiești cu ce e acum în formular?`,
+        [{ id:'da', text:'Înlocuiește', pri:true }, { id:'nu', text:'Anulează' }]);
+      if(r!=='da'){ toast('Nu am salvat nimic.'); return false; }
+    }
+  }
   const data = snapshot(true); data.salvat = new Date().toISOString();
   try{ store.luni.set(k, data); }
-  catch(e){ return toast('Nu am putut salva în browser: '+e.message, true); }
-  amprentaSalvata = amprenta(); marcheazaModificari();
+  catch(e){ toast('Nu am putut salva în browser: '+e.message, true); return false; }
+  cheieDeschisa = k;
+  amprentaSalvata = amprenta(); marcheazaModificari(); scheduleSave();
   const unde = ['în acest browser'];
   const erori = [];
   // 1. folderul de pe disc (fara token; permisiunea se cere la primul clic)
@@ -575,13 +708,14 @@ async function salveazaLuna(){
   // 2. GitHub, doar daca e configurat cu token
   const c = store.cfg.get();
   if(c.owner && c.repo && store.cfg.token()){
-    try{ await store.saveMonth(k+'.json', snapshot(), `Execuție bugetară ${numeLunii(k)}`); unde.push(`în GitHub (${c.owner}/${c.repo})`); }
+    try{ await store.saveMonth(k+'.json', data, `Execuție bugetară ${numeLunii(k)}`); unde.push(`în GitHub (${c.owner}/${c.repo})`); }
     catch(e){ erori.push('GitHub: '+e.message); }
   }
   let msg = `Salvat ${numeLunii(k)} ${unde.join(', ')}.`;
   if(unde.length===1 && store.folder.suportat() && !(await store.folder.get())) msg += ' Alege un folder de salvare din meniul ⋯ ca să ai fișierul și pe disc.';
   if(erori.length) msg += ' Nu s-a putut salva ' + erori.join('; ') + '.';
   toast(msg, erori.length>0);
+  return true;
 }
 async function alegeFolder(){
   if(!store.folder.suportat()) return toast('Browserul acesta nu permite scrierea în foldere. Folosește Chrome sau Edge; între timp lunile se salvează în browser.', true);
@@ -602,14 +736,62 @@ async function actualizeazaFolderInfo(){
   $('#folderUita').addEventListener('click', async e=>{ e.preventDefault(); await store.folder.uita(); actualizeazaFolderInfo(); toast('Folderul a fost uitat; lunile se salvează doar în browser.'); });
 }
 async function deschideLuna(k, ca){
-  // fisierul de pe disc are prioritate (poate fi modificat si din alta parte), apoi arhiva din browser
-  let d = null;
-  if(await store.folder.get() && (await store.folder.permisiune(true))==='granted') d = await store.folder.citeste(k+'.json');
-  if(!d) d = store.luni.get(k);
+  if(ca!=='prev' && !(await inainteDeInlocuire('deschizi '+numeLunii(k)))) return;
+  const d = await citesteLuna(k);
   if(!d) return toast('Luna nu există nici în folder, nici în arhiva din browser.', true);
-  if(ca==='prev'){ setPrev(d.leaves||{}, numeLunii(k)); scheduleSave(); toast('Lună precedentă: '+numeLunii(k)); dupaPrev(); }
-  else { restore(d); amprentaSalvata = amprenta(); marcheazaModificari(); toast('Deschis pentru modificări: '+numeLunii(k)); }
+  const [a, l] = k.split('-').map(Number);
   $('#luniDlg').close();
+  if(ca==='prev'){ incarcaPrev(d.leaves||{}, a, l, numeLunii(k)); return; }
+  deschide(d, 'Deschis pentru modificări: '+numeLunii(k));
+  cheieDeschisa = k; amprentaSalvata = amprenta(); marcheazaModificari();
+  await verificaBazaActualizata();
+}
+/**
+ * Fiecare luna salvata isi tine copia lunii precedente. Daca luna precedenta a fost salvata din nou intre timp
+ * (ex. iulie corectata dupa ce ai inceput august), luna deschisa s-ar calcula pe valorile vechi: propunem actualizarea.
+ */
+async function verificaBazaActualizata(){
+  if(!prev || state.mode!=='delta' || !prev.luna) return;
+  const kp = `${prev.an}-${String(prev.luna).padStart(2,'0')}`;
+  const sal = await citesteLuna(kp);
+  if(!sal || !sal.leaves) return;
+  const L = {}; LEAVES.forEach(r=>{ L[r] = { ...blank(), ...(sal.leaves[r]||{}) }; });
+  if(aceleasiFrunze(L, prev.leaves)) return;
+  const luna = numeLunaAn(state.meta.an, state.meta.luna);
+  const r = await intreaba(`${cap(prev.label)} a fost salvată din nou și are alte valori decât cele pe care se sprijină ${luna}. Recalculez ${luna} pe versiunea salvată a lunii ${prev.label}? (plățile lunii rămân aceleași, se schimbă cumulatele)`,
+    [{ id:'da', text:'Recalculează', pri:true }, { id:'nu', text:'Păstrează versiunea veche' }]);
+  if(r!=='da') return;
+  setPrev(sal.leaves, null, prev.an, prev.luna);
+  render(); scheduleSave(); marcheazaModificari();
+  toast(`${cap(luna)} se calculează acum pe ${prev.label} salvată. Verifică și salvează luna.`);
+}
+/** Toate lunile din arhiva browserului intr-un singur fisier (copie de siguranta sau mutarea pe alt calculator / alta adresa). */
+function exportArhiva(){
+  const data = { tip:'execbug-arhiva', versiune:1, generat:new Date().toISOString(), luni:store.luni.all() };
+  const n = Object.keys(data.luni).length;
+  if(!n) return toast('Arhiva din browser e goală: salvează întâi o lună.', true);
+  download(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}), `execbug-arhiva-${new Date().toISOString().slice(0,10)}.json`);
+  toast(`Am descărcat ${n} ${n===1?'lună':'luni'} într-un singur fișier.`);
+}
+/** Readuce lunile dintr-o arhiva descarcata. O luna existenta se inlocuieste doar cu o versiune salvata mai tarziu. */
+async function importArhiva(input){
+  const f = input.files[0]; if(!f) return;
+  input.value = '';
+  try{
+    const data = JSON.parse(await f.text());
+    if(!data || data.tip!=='execbug-arhiva' || !data.luni || typeof data.luni!=='object') throw new Error('Fișierul nu este o arhivă de luni (din „Descarcă toate lunile").');
+    let noi = 0, inloc = 0, pastrate = 0;
+    for(const [k, d] of Object.entries(data.luni)){
+      if(!/^\d{4}-\d{2}$/.test(k) || !d || !d.leaves) continue;
+      const ex = store.luni.get(k);
+      if(!ex){ store.luni.set(k, d); noi++; }
+      else if(String(d.salvat||d.generat||'') > String(ex.salvat||ex.generat||'')){ store.luni.set(k, d); inloc++; }
+      else pastrate++;
+    }
+    const luni = n => n===1 ? '1 lună' : n+' luni';
+    toast(`Arhivă importată: ${luni(noi)} ${noi===1?'nouă':'noi'}, ${luni(inloc)} ${inloc===1?'înlocuită':'înlocuite'} cu o versiune salvată mai târziu, ${luni(pastrate)} ${pastrate===1?'păstrată':'păstrate'} (în browser era deja o versiune la fel de nouă).`);
+    listeazaLuni(); marcheazaModificari();
+  }catch(e){ toast(e.message, true); }
 }
 async function listeazaLuni(){
   const el = $('#luniList'); const cur = cheiaLunii();
@@ -646,8 +828,18 @@ async function listeazaLuni(){
     if(b.dataset.act==='open') deschideLuna(k);
     else if(b.dataset.act==='prev') deschideLuna(k,'prev');
     else if(b.dataset.act==='json'){ const d=(surse[k].disc||surse[k].browser); download(new Blob([JSON.stringify(d,null,2)],{type:'application/json'}), k+'.json'); }
-    else if(b.dataset.act==='del'){ if(confirm('Ștergi luna '+numeLunii(k)+(surse[k].disc?' din folder și':'')+' din arhiva acestui browser?')){ store.luni.remove(k); if(surse[k].disc) store.folder.sterge(k+'.json').catch(e=>toast('Nu am putut șterge fișierul: '+e.message,true)).then(listeazaLuni); else listeazaLuni(); marcheazaModificari(); } }
+    else if(b.dataset.act==='del') stergeLuna(k, !!surse[k].disc);
   }));
+}
+
+async function stergeLuna(k, peDisc){
+  const r = await intreaba(`Ștergi ${numeLunii(k)}${peDisc?' din folder și':''} din arhiva acestui browser? Nu se poate anula.`,
+    [{ id:'da', text:'Șterge' }, { id:'nu', text:'Anulează', pri:true }]);
+  if(r!=='da') return;
+  store.luni.remove(k);
+  if(k===cheieDeschisa) cheieDeschisa = null;
+  if(peDisc){ try{ await store.folder.sterge(k+'.json'); }catch(e){ toast('Nu am putut șterge fișierul: '+e.message, true); } }
+  listeazaLuni(); marcheazaModificari();
 }
 
 /* ---------- GitHub ---------- */
@@ -675,18 +867,34 @@ async function ghLoad(name, as){
   try{
     const r = await store.loadMonth(name);
     if(!r) throw new Error('Fișierul nu există.');
-    if(as==='prev'){ setPrev(r.data.leaves||{}, name.replace('.json','')); toast('Lună precedentă încărcată din GitHub.'); dupaPrev(); }
-    else { restore(r.data); toast('Lună deschisă din GitHub.'); }
     $('#ghDlg').close();
+    if(as==='prev'){ incarcaPrev(r.data.leaves||{}, null, null, name); return; }
+    if(!(await inainteDeInlocuire('deschizi '+name))) return;
+    deschide(r.data, 'Lună deschisă din GitHub.');
   }catch(e){ toast(e.message, true); }
 }
 async function ghSave(){
   try{
     const name = store.fileName(state.meta.an, state.meta.luna);
-    await store.saveMonth(name, snapshot(), `Execuție bugetară ${LUNI[state.meta.luna-1]} ${state.meta.an}`);
+    await store.saveMonth(name, snapshot(true), `Execuție bugetară ${LUNI[state.meta.luna-1]} ${state.meta.an}`);
     toast('Salvat în GitHub: data/'+name);
     if($('#ghDlg').open) ghRefresh();
   }catch(e){ toast(e.message, true); }
+}
+
+/* ---------- col. 4: repartizarea pana la tinta BC39 ---------- */
+function repartizeaza(){
+  if(!bc39ref || bc39ref.angajament==null) return;
+  const vals = recompute();
+  const rez = repartizeazaCol4(state, vals, bc39ref.angajament/1000);
+  if(!rez) return toast('Nu am ce repartiza: col. 4 atinge ținta sau nu are rânduri libere (toate sunt tastate).', true);
+  Object.entries(rez.schimbari).forEach(([r, v])=>{ if(state.mode==='delta') state.din[r].f = v; else state.leaves[r].f = v; });
+  render(); scheduleSave();
+  const rot = rez.rotunjite.filter(r=>r!==rez.restPe).map(r=>'r.'+r);
+  const parti = [];
+  if(rot.length) parti.push(`am rotunjit în sus la mii întregi ${rot.join(', ')}`);
+  if(rez.restPe) parti.push(`${rot.length ? 'restul' : 'diferența'} l-am pus pe r.${rez.restPe}`);
+  toast(`Col. 4: ${parti.join(', iar ')}. Ținta BC39 e atinsă; poți schimba orice celulă, iar o celulă golită revine la col. 3.`);
 }
 
 /* ---------- diverse ---------- */
@@ -694,7 +902,7 @@ let saveTimer;
 function scheduleSave(){
   clearTimeout(saveTimer);
   saveTimer=setTimeout(()=>{
-    const ok = store.draft.save(snapshot(true));
+    const ok = store.draft.save({ ...snapshot(true), cheie:cheieDeschisa });
     if(!ok) toast('Atenție: Cota localStorage a fost depășită. Ciorna curentă nu a putut fi salvată automat.', true);
     marcheazaModificari();
   }, 600);
@@ -715,9 +923,11 @@ function syncMetaInputs(){
 function wire(){
   $('#luna').innerHTML = LUNI.map((l,i)=>`<option value="${i+1}">${l}</option>`).join('');
   ['an','luna','unitate'].forEach(id=>$('#'+id).addEventListener('change', e=>{
-    state.meta[id] = id==='unitate' ? e.target.value : +e.target.value; render(); scheduleSave(); amprentaSalvata=null; marcheazaModificari();
+    const v = id==='unitate' ? e.target.value : parseInt(e.target.value, 10);
+    if(id==='an' && !(v>=2000 && v<=2100)){ e.target.value = state.meta.an; return toast('Anul trebuie să fie între 2000 și 2100.', true); }
+    state.meta[id] = v; render(); scheduleSave(); amprentaSalvata=null; marcheazaModificari();
   }));
-  $('#modeCumulat').addEventListener('change', ()=>{ state.mode='cumulat'; buildTable(); render(); });
+  $('#modeCumulat').addEventListener('change', ()=>{ state.mode='cumulat'; buildTable(); render(); scheduleSave(); });
   $('#modeDelta').addEventListener('change', ()=>{
     if(!prev) return toast('Încarcă întâi luna precedentă.', true);
     treciPeDelta(true);
@@ -736,21 +946,40 @@ function wire(){
   window.addEventListener('beforeprint', ()=>{ document.title = numePdf(); });
   window.addEventListener('afterprint', ()=>{ document.title = titlu; });
   $('#btnJson').addEventListener('click', exportJson);
-  $('#btnNew').addEventListener('click', ()=>{ if(confirm('Golești formularul curent?')){ state=newState(); store.draft.clear(); bc39ref=null; importNote=null; prev=null; $('#bcRef').textContent=''; $('#prevHdr').hidden=true; $('#modeSeg').hidden=true; $('#modeDelta').disabled=true; $('#prevInfo').textContent='Nicio lună precedentă încărcată'; syncMetaInputs(); buildTable(); render(); }});
+  $('#btnNew').addEventListener('click', async ()=>{
+    const r = await intreaba('Golești formularul? Lunile salvate rămân în arhivă.', nesalvat()
+      ? [{ id:'save', text:'Salvează luna și golește', pri:true }, { id:'da', text:'Golește fără să salvez' }, { id:'nu', text:'Anulează' }]
+      : [{ id:'da', text:'Golește', pri:true }, { id:'nu', text:'Anulează' }]);
+    if(r==='save' ? !(await salveazaLuna()) : r!=='da') return;
+    state = newState(); store.draft.clear(); bc39ref = null; importNote = null; clearPrev(); cheieDeschisa = null; amprentaSalvata = null;
+    $('#bcRef').textContent = ''; $('#filtru').value = '';
+    syncMetaInputs(); buildTable(); render(); marcheazaModificari();
+  });
   $('#fPrev').addEventListener('change', e=>onFile(e.target,'prev'));
   $('#fCur').addEventListener('change', e=>onFile(e.target,'cur'));
   $('#fBc').addEventListener('change', e=>onFile(e.target,'bc39'));
   $('#btnGh').addEventListener('click', ()=>{ const c=store.cfg.get();
     $('#ghOwner').value=c.owner||''; $('#ghRepo').value=c.repo||''; $('#ghBranch').value=c.branch||'main';
     $('#ghDir').value=c.dir||'data'; $('#ghTok').value=store.cfg.token();
+    // pe *.github.io toate site-urile contului impart aceeasi origine, deci acelasi localStorage
+    $('#ghOrigine').hidden = !/\.github\.io$/i.test(location.hostname);
     $('#ghDlg').showModal(); if(c.owner&&c.repo) ghRefresh(); });
+  $('#ghForm').addEventListener('submit', e=>e.preventDefault());   // Enter intr-un camp nu reincarca pagina
   $('#ghSaveCfg').addEventListener('click', ()=>{
     store.cfg.set({owner:$('#ghOwner').value.trim(), repo:$('#ghRepo').value.trim(), branch:$('#ghBranch').value.trim()||'main', dir:$('#ghDir').value.trim()||'data'});
     store.cfg.setToken($('#ghTok').value.trim()); ghRefresh(); });
   $('#ghPush').addEventListener('click', ghSave);
   $('#ghClose').addEventListener('click', ()=>$('#ghDlg').close());
   $('#btnSide').addEventListener('click', ()=>setSide(!document.body.classList.contains('side-open')));
-  $('#guide').addEventListener('click', e=>{ if(e.target.id==='guideMore') setSide(true); if(e.target.id==='guideReload') reincarca(); });
+  $('#guide').addEventListener('click', e=>{
+    if(e.target.id==='guideMore') setSide(true);
+    if(e.target.id==='guideReload') reincarca();
+    if(e.target.id==='guideAct' && e.target.dataset.act==='zero') pornesteDeLaZero();
+  });
+  // butoanele din randul-tinta se refac la fiecare randare: un singur ascultator pe tabel
+  $('.tablewrap').addEventListener('click', e=>{ if(e.target.closest('[data-act="repartizeaza"]')) repartizeaza(); });
+  $('#btnArhivaExport').addEventListener('click', exportArhiva);
+  $('#fArhiva').addEventListener('change', e=>importArhiva(e.target));
   $('#btnSideClose').addEventListener('click', ()=>setSide(false));
   document.addEventListener('keydown', e=>{ if(e.key==='Escape' && document.body.classList.contains('side-open')) setSide(false); });
   document.addEventListener('click', e=>{ if(document.body.classList.contains('side-open') && !e.target.closest('.side') && !e.target.closest('#btnSide') && e.target.id!=='guideMore') setSide(false); });
@@ -776,7 +1005,7 @@ async function verificaVersiunea(){
 }
 function reincarca(){
   // reload-ul normal revalideaza pagina; daca browserul tot o tine, adresa cu parametru nou o forteaza
-  try{ store.draft.save(snapshot(true)); }catch{}
+  try{ store.draft.save({ ...snapshot(true), cheie:cheieDeschisa }); }catch{}
   location.replace(location.pathname + '?r=' + Date.now());
 }
 
@@ -784,8 +1013,19 @@ async function init(){
   try{ const t=localStorage.getItem('execbug.theme'); if(t) document.documentElement.setAttribute('data-theme',t); }catch{}
   wire(); syncMetaInputs(); buildTable();
   const d = store.draft.load();
-  if(d){ try{ restore(d); toast('Ciornă restaurată din acest browser.'); }catch{} }
+  if(d){
+    try{ deschide(d, 'Ciornă restaurată din acest browser.'); cheieDeschisa = 'cheie' in d ? d.cheie : cheiaLunii(); }
+    catch(e){
+      // o ciorna deteriorata nu trebuie sa blocheze pornirea: o punem deoparte si pornim un formular gol
+      store.draft.pastreazaDeteriorata(d);
+      state = newState(); clearPrev(); bc39ref = null; importNote = null; cheieDeschisa = null;
+      syncMetaInputs(); buildTable();
+      toast('Ciorna din acest browser nu a putut fi citită; am pus-o deoparte (execbug.draft.deteriorata) și am pornit un formular gol.', true);
+    }
+  }
   render();
+  // cere browserului sa nu stearga datele site-ului cand ramane fara spatiu (Chrome aproba fara intrebare)
+  try{ navigator.storage?.persist?.().catch(()=>{}); }catch{}
   try{ TPL = await loadTemplate('./template/macheta.xlsx'); }
   catch(e){ toast('Șablon indisponibil: '+e.message, true); }
   render();

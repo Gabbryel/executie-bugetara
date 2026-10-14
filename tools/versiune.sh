@@ -4,5 +4,5 @@
 set -e
 cd "$(dirname "$0")/.."
 v=$(date +%Y%m%d-%H%M%S)
-perl -pi -e "s/\?v=[0-9A-Za-z._-]+/?v=$v/g" index.html assets/app.js assets/xlsx.js assets/store.js
+perl -pi -e "s/\?v=[0-9A-Za-z._-]+/?v=$v/g" index.html assets/app.js assets/xlsx.js assets/store.js assets/calc.js
 echo "$v"

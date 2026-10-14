@@ -1,0 +1,10 @@
+{
+  "name": "executie-bugetara",
+  "private": true,
+  "type": "module",
+  "description": "Machetă CAS — execuție bugetară. Fără dependențe la runtime; testele rulează cu Node 22+ fără instalare.",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "smoke": "node tests/smoke.cjs"
+  }
+}

@@ -16,17 +16,21 @@ Rulează integral în browser. Se publică pe GitHub Pages.
   4. plăți cumulate ≤ credite de angajament (col.6 ≤ col.4);
   5. cheltuieli efective ≥ plăți (col.8 ≥ col.6), cu decalajul accrual–cash;
   6. integritatea șablonului (formula `I117`);
-  7. formatul fișei BC39 (numărul coloanelor de valori diferă între luni).
+  7. formatul fișei BC39 (numărul coloanelor de valori diferă între luni);
+  8. luna precedentă este chiar luna dinainte; în ianuarie cumulatele pornesc de la zero („Pornește de la zero");
+  9. în modul cumulat, col. 7 = col. 6 − col. 6 din luna precedentă, pe fiecare rând.
 
   În panoul „Verificări" apar ca elemente proprii doar corelația BC39, verificarea col. 8 și cele picate;
   verificările trecute care nu spun nimic nou (coloane legate, cumulat în delta, șablon, format BC39) se strâng
   într-o singură linie „Trec fără observații". Verificările 4 și 5 sunt avertismente, nu erori: machetele reale
   le-au încălcat pe câte un rând. Când nicio Δ nu e tastată, verificarea 5 e informativă: spune că col. 8 urmează col. 7 și pe ce rânduri luna precedentă avea facturi neplătite.
-- **Export `.xlsx` identic cu macheta CAS.** Aplicația nu generează un fișier nou: deschide șablonul original, scrie doar valorile și lasă neatinse formatarea, formulele, înălțimile de rând și setările de tipărire. Verificat prin recalculare: totalurile exportate coincid la a treia zecimală cu fișierele originale.
+- **Export `.xlsx` identic cu macheta CAS.** Aplicația nu generează un fișier nou: deschide șablonul original, scrie doar valorile și lasă neatinse formatarea, formulele, înălțimile de rând și setările de tipărire. Lângă fiecare formulă scrie și totalul calculat, ca previzualizările (Quick Look, e-mail) să arate cifrele; Excel le recalculează oricum la deschidere.
+- **Col. 4 dintr-un clic**: „repartizează" în rândul-țintă BC39 rotunjește în sus la mii întregi câteva rânduri din col. 4, ca la contabil, până la ținta din fișă.
+- **Lipire din Excel**: mai multe celule copiate se așază pe rândurile machetei, de la celula selectată în jos.
 - **Tipărire / PDF** direct din browser (A4 landscape), cu antetul și rubricile de semnătură.
 - **Salvarea lunii** dintr-un singur buton („Salvează luna" sau Ctrl/Cmd+S): luna intră în arhiva din browser și, dacă ai configurat depozitul, și în GitHub. Din „Luni salvate…" redeschizi oricare lună, o modifici și o salvezi din nou; poți folosi o lună salvată ca lună precedentă sau o poți exporta ca JSON.
 - **Folder de salvare pe disc, fără token**: în Chrome sau Edge alegi o dată un folder (meniul ⋯ → „Folder de salvare…"), iar „Salvează luna" scrie acolo `AAAA-LL.json`; „Export .xlsx" pune în același folder și macheta `Macheta Executie spital <LUNA> <AN>.xlsx`. PDF-ul îl salvezi din fereastra de tipărire („Salvează ca PDF"): numele fișierului e propus de aplicație, folderul îl alegi tu prima dată, iar browserul îl ține minte. Dacă folderul e sincronizat cu OneDrive, Google Drive sau Dropbox, ai backup și acces de pe alt calculator fără nicio configurare.
-- **Persistență**: ciornă automată în browser, export/import JSON și, opțional, un depozit GitHub ca bază de date.
+- **Persistență**: ciornă automată în browser, export/import JSON, „Descarcă toate lunile" / „Importă lunile din fișier…" și, opțional, un depozit GitHub ca bază de date. Aplicația întreabă înainte să înlocuiască un formular cu modificări nesalvate sau să suprascrie altă lună salvată.
 
 ## Baza de date în GitHub
 
@@ -50,6 +54,8 @@ Setări GitHub → Developer settings → Personal access tokens → **Fine-grai
 - **Repository access**: doar `executie-bugetara-date`
 - **Permissions → Repository permissions → Contents**: `Read and write`
 - **Expiration**: cât mai scurtă (30–90 zile)
+
+**Domeniu propriu.** Pe `<user>.github.io`, toate site-urile publicate din același cont împart memoria browserului (localStorage), deci orice script de pe celelalte site-uri ar putea citi tokenul și lunile salvate. Pune aplicația pe un domeniu propriu (Settings → Pages → Custom domain, plus o înregistrare CNAME la furnizorul domeniului) înainte să salvezi un token. Înainte de mutare: „Luni salvate… → Descarcă toate lunile", apoi, pe adresa nouă, „Importă lunile din fișier…" și alege din nou folderul de salvare.
 
 Tokenul se păstrează în `localStorage`, în browserul tău. Oricine are acces la acel profil de browser îl poate extrage — de aceea trebuie limitat la un singur depozit și reînnoit periodic. Fără token, aplicația funcționează complet local (import/export de fișiere); citirea fără token merge doar dintr-un depozit public.
 
@@ -96,7 +102,20 @@ template/macheta.xlsx    șablonul CAS, cu valorile golite
 
 Valorile au fost golite, iar cache-ul formulelor șters (`fullCalcOnLoad`), astfel încât Excel recalculează la deschidere.
 
-**Când CAS trimite o machetă nouă**, înlocuiește `template/macheta.xlsx`. Dacă se schimbă și structura rândurilor, trebuie regenerat `assets/rows.js` — modelul este derivat din formulele coloanei E, rândurile 8–128.
+**Când CAS trimite o machetă nouă**:
+
+```bash
+node tools/pregateste-sablon.mjs "Macheta CAS noua.xlsx" template/macheta.xlsx   # golește, corectează, listează ce a schimbat
+node tools/genereaza-rows.mjs            # verifică dacă structura rândurilor s-a schimbat
+node tools/genereaza-rows.mjs --scrie    # doar dacă s-a schimbat: rescrie assets/rows.js
+npm test
+```
+
+Pregătirea aplicată pe macheta din iulie 2026 produce exact șablonul din depozit.
+
+## Teste
+
+`npm test` (Node 22+, fără instalare). Cu machetele reale, ținute în afara depozitului: `MACHETE_DIR=<folder> npm test`.
 
 ## Limite
 

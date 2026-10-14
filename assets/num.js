@@ -23,9 +23,19 @@ export function parseNum(v){
     } else {
       s = s.replace(',', '.');
     }
+  } else if(s.split('.').length > 2){
+    // Mai multe puncte, fara virgula: separatori de mii (1.234.567 = 1234567)
+    s = s.replace(/\./g, '');
   }
   const n=parseFloat(s);
   return isFinite(n)?n:0;
+}
+/** Numarul dintr-o celula sau null daca celula nu contine un numar (text, gol). */
+export function numSauNull(v){
+  if(typeof v==='number') return isFinite(v)?v:null;
+  const s = String(v??'').trim();
+  if(!/^[-+]?[\d\s  .,]*\d[\d\s  .,]*(e[-+]?\d+)?$/i.test(s)) return null;
+  return parseNum(s);
 }
 export const r3 = n => n === 0 ? 0 : Math.sign(n) * (Math.round((Math.abs(n)+Number.EPSILON)*1000)/1000);
 export function fmt(n,dec=3){

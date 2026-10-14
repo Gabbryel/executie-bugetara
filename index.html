@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.github.com;">
 <title>Execuție bugetară — machetă CAS</title>
-<link rel="stylesheet" href="assets/styles.css?v=20261014-120834">
+<link rel="stylesheet" href="assets/styles.css?v=20261014-132140">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>📊</text></svg>">
 </head>
 <body>
@@ -85,7 +85,7 @@
     <span hidden id="t8e"></span><span hidden id="t8f"></span>
     <div class="side-h"><h3>Lista de control</h3></div>
     <div class="checks" id="checks"></div>
-    <p class="hintbox">Modul <b>delta</b> se activează după ce încarci luna precedentă: completezi doar plățile lunii (col. 7) și delta cheltuielilor efective, iar cumulatele se calculează singure. Col. 4 (credite de angajament) urmează col. 3, iar Δ (cheltuiala lunii, col. 8) urmează col. 7 — tastezi doar rândurile care diferă (rotunjiri, facturi neplătite); o celulă golită revine la automat.</p>
+    <p class="hintbox">Modul <b>delta</b> se activează după ce încarci luna precedentă: completezi doar plățile lunii (col. 7) și delta cheltuielilor efective, iar cumulatele se calculează singure. Col. 4 (credite de angajament) urmează col. 3, iar Δ (cheltuiala lunii, col. 8) urmează col. 7 — tastezi doar rândurile care diferă (rotunjiri, facturi neplătite); o celulă golită revine la automat. „Repartizează" din rândul țintă rotunjește col. 4 până la ținta BC39. În ianuarie cumulatele pornesc de la zero („Pornește de la zero"). Poți lipi din Excel mai multe celule deodată: se așază pe rândurile machetei, de la celula selectată în jos.</p>
   </aside>
 
   <p class="status noprint" id="status"></p>
@@ -97,13 +97,24 @@
     <p class="muted" style="margin-top:0">Deschide o lună ca să o modifici, apoi apasă „Salvează luna". Salvarea suprascrie versiunea acelei luni; lunile diferite nu se ating între ele.</p>
     <p class="muted small" id="luniSursa" style="margin:0 0 8px"></p>
     <div id="luniList" class="gh-list" style="max-height:340px"></div>
+    <div class="row-inline" style="margin-top:12px">
+      <button class="btn" type="button" id="btnArhivaExport" title="Toate lunile din acest browser într-un singur fișier .json — copie de siguranță sau mutare pe alt calculator">Descarcă toate lunile</button>
+      <label class="btn" title="Readuce lunile dintr-un fișier descărcat cu „Descarcă toate lunile”">Importă lunile din fișier…<input type="file" id="fArhiva" accept=".json" hidden></label>
+    </div>
     <p class="status-inline" id="luniStatus"></p>
+  </div>
+</dialog>
+
+<dialog id="askDlg" class="noprint">
+  <div class="dlg-b">
+    <p id="askText" style="margin-top:0"></p>
+    <div class="row-inline" id="askBtns" style="justify-content:flex-end"></div>
   </div>
 </dialog>
 
 <dialog id="ghDlg">
   <div class="dlg-h"><h3>Bază de date în GitHub</h3><button class="btn" id="ghClose" type="button">Închide</button></div>
-  <form class="dlg-b" onsubmit="event.preventDefault()">
+  <form class="dlg-b" id="ghForm">
     <p class="muted" style="margin-top:0">Fiecare lună se salvează ca <code>data/AAAA-LL.json</code> într-un depozit GitHub. Depozitul este baza de date; istoricul commit-urilor este jurnalul de modificări.</p>
     <div class="cols2">
       <label class="fld"><span>Owner (user / org)</span><input type="text" id="ghOwner" placeholder="ex. gabriel"></label>
@@ -112,7 +123,7 @@
       <label class="fld"><span>Director</span><input type="text" id="ghDir" value="data"></label>
     </div>
     <label class="fld" style="margin-top:10px"><span>Token (fine-grained PAT, Contents: read and write)</span><input type="password" id="ghTok" autocomplete="current-password" placeholder="github_pat_…"></label>
-    <div class="warnbox">Tokenul se păstrează doar în <b>localStorage</b>, în acest browser. Oricine folosește acest profil de browser îl poate extrage. Emite un token <i>fine-grained</i> limitat la un singur depozit privat, cu expirare scurtă, și șterge-l când nu îl mai folosești. Fără token se poate doar citi, și numai dintr-un depozit public.</div>
+    <div class="warnbox">Tokenul se păstrează doar în <b>localStorage</b>, în acest browser. Oricine folosește acest profil de browser îl poate extrage. Emite un token <i>fine-grained</i> limitat la un singur depozit privat, cu expirare scurtă, și șterge-l când nu îl mai folosești. Fără token se poate doar citi, și numai dintr-un depozit public.<span id="ghOrigine" hidden><br><b>Atenție:</b> pe o adresă <i>github.io</i>, toate site-urile publicate din același cont GitHub împart aceeași memorie a browserului, deci pot citi tokenul. Pune aplicația pe un domeniu propriu înainte să salvezi un token.</span></div>
     <div class="row-inline" style="margin-top:12px">
       <button class="btn pri" type="button" id="ghSaveCfg">Salvează setările și testează</button>
       <button class="btn" type="button" id="ghPush">Salvează luna curentă în GitHub</button>
@@ -122,7 +133,7 @@
   </form>
 </dialog>
 
-<script src="assets/jszip.min.js?v=20261014-120834"></script>
-<script type="module" src="assets/app.js?v=20261014-120834"></script>
+<script src="assets/jszip.min.js?v=20261014-132140"></script>
+<script type="module" src="assets/app.js?v=20261014-132140"></script>
 </body>
 </html>

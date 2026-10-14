@@ -103,7 +103,8 @@ export const folder = {
 export const draft = {
   save(state){ try{ localStorage.setItem(LS_DRAFT, JSON.stringify(state)); return true; }catch{ return false; } },
   load(){ try{ return JSON.parse(localStorage.getItem(LS_DRAFT)||'null'); }catch{ return null; } },
-  clear(){ try{ localStorage.removeItem(LS_DRAFT); }catch{} }
+  clear(){ try{ localStorage.removeItem(LS_DRAFT); }catch{} },
+  pastreazaDeteriorata(d){ try{ localStorage.setItem(LS_DRAFT+'.deteriorata', JSON.stringify(d)); localStorage.removeItem(LS_DRAFT); }catch{} }
 };
 
 function conf(){

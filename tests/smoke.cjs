@@ -1,5 +1,5 @@
-// Test end-to-end. Rulează: python3 -m http.server 8899 && node tests/smoke.js
-// Optional: MACHETA_CUR, MACHETA_PREV, BC39 = cai catre fisiere reale (NU se commit-uiesc).
+// Test end-to-end (optional, cere Playwright). Rulează: python3 -m http.server 8899 && npm run smoke
+// Optional: MACHETA_CUR, MACHETA_PREV (luna dinainte), BC39 = cai catre fisiere reale (NU se commit-uiesc).
 const { chromium } = require('playwright');
 const fs = require('fs'); const os = require('os'); const path = require('path');
 const URL = process.env.APP_URL || 'http://localhost:8899/index.html';
